@@ -1,0 +1,2 @@
+"""Packaged project configuration template."""
+

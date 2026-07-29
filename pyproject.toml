@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-ops"
+version = "0.1.0"
+description = "Portable read-only operational preflight checks"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "LicenseRef-Proprietary"
+authors = [{ name = "hermes-ops contributors" }]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "build>=1.2,<2", "setuptools>=68"]
+
+[project.scripts]
+hermes-ops = "hermes_ops.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+hermes_ops = ["templates/*.toml"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
