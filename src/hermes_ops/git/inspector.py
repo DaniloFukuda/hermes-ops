@@ -2,9 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 from typing import Callable
 
 from hermes_ops.core.processes import ProcessResult, run_process
+from hermes_ops.core.paths import (
+    direct_project_path,
+    is_indirect_path,
+)
+from hermes_ops.core.errors import PathResolutionError
 from hermes_ops.git.environment import safe_git_environment
 from hermes_ops.git.parser import WorktreeChanges, parse_porcelain_v1_z
 
@@ -52,7 +58,8 @@ class GitInspector:
                 error="Declared project root could not be resolved",
                 error_code="git_declared_root_invalid",
             )
-        if (declared_root / ".git").is_file():
+        git_entry = declared_root / ".git"
+        if is_indirect_path(git_entry) or git_entry.is_file():
             return GitState(
                 True,
                 True,
@@ -62,6 +69,9 @@ class GitInspector:
                 ),
                 error_code="git_indirect_repository_unsupported",
             )
+        unsafe_config = self._unsafe_local_config(declared_root)
+        if unsafe_config is not None:
+            return unsafe_config
         probe = self._run(project, "rev-parse", "--is-inside-work-tree")
         if not probe.started:
             return GitState(
@@ -165,11 +175,64 @@ class GitInspector:
 
     def _run(self, cwd: Path, *args: str) -> ProcessResult:
         return self.runner(
-            (self.executable, "-c", "core.fsmonitor=false", *args),
+            (
+                self.executable,
+                "-c",
+                "core.fsmonitor=false",
+                "-c",
+                "core.autocrlf=input",
+                *args,
+            ),
             cwd=cwd,
             timeout=self.timeout,
             env=safe_git_environment(),
         )
+
+    @staticmethod
+    def _unsafe_local_config(root: Path) -> GitState | None:
+        try:
+            config_path = direct_project_path(root, ".git/config")
+        except PathResolutionError:
+            return GitState(
+                True,
+                True,
+                error="Git configuration uses an indirect filesystem entry",
+                error_code="git_unsafe_local_config",
+            )
+        if not config_path.is_file():
+            return None
+        try:
+            text = config_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return GitState(
+                True,
+                True,
+                error="Git configuration could not be read safely",
+                error_code="git_operational_error",
+            )
+        section_pattern = re.compile(
+            r"^\s*\[\s*([A-Za-z][A-Za-z0-9.-]*)",
+            re.MULTILINE,
+        )
+        sections = {
+            match.group(1).casefold()
+            for match in section_pattern.finditer(text)
+        }
+        if sections.intersection({"include", "includeif"}):
+            return GitState(
+                True,
+                True,
+                error="Git configuration includes external configuration",
+                error_code="git_unsafe_local_config",
+            )
+        if "filter" in sections:
+            return GitState(
+                True,
+                True,
+                error="Git configuration defines external content filters",
+                error_code="git_unsafe_local_config",
+            )
+        return None
 
     def _classify_probe_failure(self, result: ProcessResult) -> GitState:
         message = self._safe_git_error(result, "Git repository probe failed")

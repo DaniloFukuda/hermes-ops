@@ -11,6 +11,8 @@ Do not add assumptions or integrations specific to consumer projects.
 - Keep Git operations in `hermes_ops.git` read-only.
 - Disable optional locks, inherited `GIT_*` redirections, and external
   fsmonitor for every runtime Git command.
+- Block local Git configuration includes and filter sections before running
+  any Git query; neutralize global and system Git configuration.
 - Run subprocesses through `hermes_ops.core.processes`.
 - Use `pathlib` for filesystem paths.
 - Treat `--project` as the exact root; never discover parents or siblings.
@@ -29,4 +31,3 @@ Do not add assumptions or integrations specific to consumer projects.
   `.venv\Scripts\python.exe -m build`.
 - The canonical project template lives only in
   `src/hermes_ops/templates/project.toml`.
-

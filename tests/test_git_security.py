@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import stat
+import subprocess
 import sys
 
 from conftest import VALID_CONFIG, git
@@ -47,6 +47,9 @@ def test_safe_environment_removes_all_inherited_git_variables() -> None:
     assert result["SystemRoot"] == "kept"
     assert result["GIT_OPTIONAL_LOCKS"] == "0"
     assert result["GIT_TERMINAL_PROMPT"] == "0"
+    assert result["GIT_CONFIG_GLOBAL"] == os.devnull
+    assert result["GIT_CONFIG_SYSTEM"] == os.devnull
+    assert result["GIT_CONFIG_NOSYSTEM"] == "1"
     assert "GIT_DIR" not in result
     assert "git_work_tree" not in result
     assert "GIT_CONFIG_KEY_0" not in result
@@ -186,19 +189,116 @@ def test_external_core_worktree_is_blocked(tmp_path: Path) -> None:
 
 
 def test_hostile_fsmonitor_is_not_executed(tmp_path: Path) -> None:
-    if sys.platform == "win32":
-        import pytest
-
-        pytest.skip("Executable fsmonitor fixture is validated on Linux CI")
     target = make_repo(tmp_path / "target")
     marker = tmp_path / "fsmonitor-executed"
-    hook = tmp_path / "hostile-fsmonitor.sh"
+    hook = tmp_path / "hostile_fsmonitor.py"
     hook.write_text(
-        f"#!/bin/sh\nprintf executed > '{marker}'\n",
+        (
+            "from pathlib import Path\n"
+            "import sys\n"
+            "Path(sys.argv[1]).write_text('executed', encoding='utf-8')\n"
+        ),
         encoding="utf-8",
     )
-    hook.chmod(hook.stat().st_mode | stat.S_IXUSR)
-    git(target, "config", "core.fsmonitor", str(hook))
+    command = (
+        f'"{Path(sys.executable).as_posix()}" '
+        f'"{hook.as_posix()}" "{marker.as_posix()}"'
+    )
+    git(target, "config", "core.fsmonitor", command)
+
+    git(target, "status", "--porcelain=v1", check=False)
+    assert marker.exists(), "The hostile fsmonitor fixture was not active"
+    marker.unlink()
+
     state = GitInspector().inspect(target)
     assert state.is_repository
+    assert not marker.exists()
+
+
+def _create_git_directory_indirection(link: Path, target: Path) -> None:
+    if sys.platform == "win32":
+        completed = subprocess.run(
+            ("cmd", "/c", "mklink", "/J", str(link), str(target)),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            import pytest
+
+            pytest.skip("Directory junctions are not available")
+    else:
+        link.symlink_to(target, target_is_directory=True)
+
+
+def test_git_directory_junction_or_symlink_is_blocked(tmp_path: Path) -> None:
+    external = make_repo(tmp_path / "external")
+    declared = tmp_path / "declared"
+    declared.mkdir()
+    _create_git_directory_indirection(
+        declared / ".git",
+        external / ".git",
+    )
+    state = GitInspector().inspect(declared)
+    assert state.error_code == "git_indirect_repository_unsupported"
+
+
+def test_local_config_include_is_not_loaded(tmp_path: Path) -> None:
+    target = make_repo(tmp_path / "target")
+    hostile_include = tmp_path / "hostile-config"
+    hostile_include.write_text("[invalid\n", encoding="utf-8")
+    git(target, "config", "include.path", str(hostile_include))
+
+    state = GitInspector().inspect(target)
+
+    assert state.error_code == "git_unsafe_local_config"
+
+
+def test_clean_and_process_filters_are_not_executed(tmp_path: Path) -> None:
+    target = make_repo(tmp_path / "target")
+    attributes = target / ".gitattributes"
+    attributes.write_text("tracked.txt filter=hostile\n", encoding="utf-8")
+    git(target, "add", ".gitattributes")
+    git(target, "commit", "-m", "add hostile filter attribute")
+
+    marker = tmp_path / "filter-executed"
+    clean_script = tmp_path / "clean_filter.py"
+    clean_script.write_text(
+        (
+            "from pathlib import Path\n"
+            "import sys\n"
+            "Path(sys.argv[1]).write_text('executed', encoding='utf-8')\n"
+            "sys.stdout.buffer.write(sys.stdin.buffer.read())\n"
+        ),
+        encoding="utf-8",
+    )
+    clean_command = (
+        f'"{Path(sys.executable).as_posix()}" '
+        f'"{clean_script.as_posix()}" "{marker.as_posix()}"'
+    )
+    git(target, "config", "filter.hostile.clean", clean_command)
+    (target / "tracked.txt").write_text("changed\n", encoding="utf-8")
+
+    git(target, "status", "--porcelain=v1")
+    assert marker.exists(), "The hostile clean-filter fixture was not active"
+    marker.unlink()
+
+    process_script = tmp_path / "process_filter.py"
+    process_script.write_text(
+        (
+            "from pathlib import Path\n"
+            "import sys\n"
+            "Path(sys.argv[1]).write_text('executed', encoding='utf-8')\n"
+        ),
+        encoding="utf-8",
+    )
+    process_command = (
+        f'"{Path(sys.executable).as_posix()}" '
+        f'"{process_script.as_posix()}" "{marker.as_posix()}"'
+    )
+    git(target, "config", "filter.hostile.process", process_command)
+
+    state = GitInspector().inspect(target)
+
+    assert state.error_code == "git_unsafe_local_config"
     assert not marker.exists()

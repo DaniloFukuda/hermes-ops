@@ -10,9 +10,10 @@ from hermes_ops.core.errors import (
     ConfigurationMissingError,
     ConfigurationSchemaError,
     ConfigurationSyntaxError,
+    ConfigurationUnsafePathError,
     PathResolutionError,
 )
-from hermes_ops.core.paths import project_relative_path
+from hermes_ops.core.paths import direct_project_path, project_relative_path
 from hermes_ops.core.platform_info import parse_version
 
 
@@ -101,14 +102,22 @@ DEFAULT_PROTECTED_FILES = (
 
 
 def load_project_config(root: Path) -> ProjectConfig:
-    path = root / CONFIG_RELATIVE_PATH
-    if not path.is_file():
-        raise ConfigurationMissingError(f"Configuration not found: {path}")
+    path = project_config_path(root)
     try:
         raw = tomllib.loads(path.read_text(encoding="utf-8"))
     except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as exc:
         raise ConfigurationSyntaxError(f"Invalid TOML in {path}: {exc}") from exc
     return parse_project_config(raw, root=root)
+
+
+def project_config_path(root: Path) -> Path:
+    try:
+        path = direct_project_path(root, CONFIG_RELATIVE_PATH)
+    except PathResolutionError as exc:
+        raise ConfigurationUnsafePathError(str(exc)) from exc
+    if not path.is_file():
+        raise ConfigurationMissingError(f"Configuration not found: {path}")
+    return path
 
 
 def parse_project_config(raw: Any, *, root: Path) -> ProjectConfig:

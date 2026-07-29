@@ -67,6 +67,7 @@ def test_sdist_contains_source_template_readme_and_metadata(
         for name in names
     )
     assert any(name.endswith("/pyproject.toml") for name in names)
+    assert any(name.endswith("/tests/conftest.py") for name in names)
     assert not any("/.venv/" in name for name in names)
     assert not any("__pycache__" in name for name in names)
 

@@ -24,3 +24,6 @@ class ConfigurationSyntaxError(ConfigurationError):
 class ConfigurationSchemaError(ConfigurationError):
     """The TOML document does not match the supported schema."""
 
+
+class ConfigurationUnsafePathError(ConfigurationError):
+    """The configuration path uses a symlink, junction, or reparse point."""

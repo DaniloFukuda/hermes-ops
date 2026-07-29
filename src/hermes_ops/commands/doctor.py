@@ -7,8 +7,13 @@ from hermes_ops.core.configuration import (
     CONFIG_RELATIVE_PATH,
     ProjectConfig,
     load_project_config,
+    project_config_path,
 )
-from hermes_ops.core.errors import ConfigurationError, PathResolutionError
+from hermes_ops.core.errors import (
+    ConfigurationError,
+    ConfigurationMissingError,
+    PathResolutionError,
+)
 from hermes_ops.core.paths import resolve_directory
 from hermes_ops.core.platform_info import current_platform, python_is_compatible
 from hermes_ops.core.results import CheckResult, Report, Status
@@ -29,18 +34,37 @@ def run_doctor(project: str | Path) -> Report:
     )
 
     root = supplied
-    config_path = root / CONFIG_RELATIVE_PATH
-    if not config_path.is_file():
+    try:
+        config_path = project_config_path(root)
+    except ConfigurationMissingError:
         return Report.from_results(
             "doctor",
             results
             + [
                 CheckResult(
-                    "root",
-                    Status.BLOCKED,
-                    "The supplied directory is not a declared project root",
-                    {"root": root, "required_configuration": config_path},
+                        "root",
+                        Status.BLOCKED,
+                        "The supplied directory is not a declared project root",
+                        {
+                            "root": root,
+                            "required_configuration": root
+                            / CONFIG_RELATIVE_PATH,
+                        },
                     "root_configuration_missing",
+                )
+            ],
+        )
+    except ConfigurationError as exc:
+        return Report.from_results(
+            "doctor",
+            results
+            + [
+                CheckResult(
+                    "configuration",
+                    Status.BLOCKED,
+                    str(exc),
+                    {"root": root},
+                    _config_code(exc),
                 )
             ],
         )
@@ -164,6 +188,7 @@ def run_doctor(project: str | Path) -> Report:
             in {
                 "git_root_mismatch",
                 "git_indirect_repository_unsupported",
+                "git_unsafe_local_config",
             }
             else Status.ERROR
         )

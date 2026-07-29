@@ -1,8 +1,39 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
+import stat
 
 from hermes_ops.core.errors import PathResolutionError
+
+
+def is_indirect_path(path: Path) -> bool:
+    """Return whether one filesystem entry is a symlink or reparse point."""
+
+    try:
+        metadata = os.lstat(path)
+    except OSError:
+        return False
+    attributes = getattr(metadata, "st_file_attributes", 0)
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    return stat.S_ISLNK(metadata.st_mode) or bool(attributes & reparse_flag)
+
+
+def direct_project_path(root: Path, relative: str | Path) -> Path:
+    """Resolve a project path only after proving every entry is direct."""
+
+    resolved_root = root.resolve(strict=True)
+    relative_path = Path(relative)
+    if relative_path.is_absolute() or ".." in relative_path.parts:
+        raise PathResolutionError("Project path must be relative and contained")
+    candidate = resolved_root
+    for part in relative_path.parts:
+        candidate = candidate / part
+        if is_indirect_path(candidate):
+            raise PathResolutionError(
+                f"Project path uses an indirect filesystem entry: {relative}"
+            )
+    return candidate
 
 
 def resolve_directory(value: str | Path, *, base: Path | None = None) -> Path:

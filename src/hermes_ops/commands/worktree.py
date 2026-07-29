@@ -2,8 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from hermes_ops.core.configuration import CONFIG_RELATIVE_PATH, load_project_config
-from hermes_ops.core.errors import ConfigurationError, PathResolutionError
+from hermes_ops.core.configuration import (
+    CONFIG_RELATIVE_PATH,
+    load_project_config,
+    project_config_path,
+)
+from hermes_ops.core.errors import (
+    ConfigurationError,
+    ConfigurationMissingError,
+    PathResolutionError,
+)
 from hermes_ops.core.paths import resolve_directory
 from hermes_ops.core.results import CheckResult, Report, Status
 from hermes_ops.git.inspector import GitInspector
@@ -18,7 +26,9 @@ def run_worktree(project: str | Path) -> Report:
             [CheckResult("path", Status.BLOCKED, str(exc), code="path_invalid")],
         )
     root = supplied
-    if not (root / CONFIG_RELATIVE_PATH).is_file():
+    try:
+        project_config_path(root)
+    except ConfigurationMissingError:
         return Report.from_results(
             "worktree",
             [
@@ -28,6 +38,19 @@ def run_worktree(project: str | Path) -> Report:
                     "The supplied directory is not a declared project root",
                     {"root": root},
                     "root_configuration_missing",
+                )
+            ],
+        )
+    except ConfigurationError as exc:
+        return Report.from_results(
+            "worktree",
+            [
+                CheckResult(
+                    "configuration",
+                    Status.BLOCKED,
+                    str(exc),
+                    {"root": root},
+                    "config_unsafe_path",
                 )
             ],
         )
@@ -86,6 +109,7 @@ def run_worktree(project: str | Path) -> Report:
             in {
                 "git_root_mismatch",
                 "git_indirect_repository_unsupported",
+                "git_unsafe_local_config",
             }
             else Status.ERROR
         )

@@ -73,6 +73,9 @@ packaged at `src/hermes_ops/templates/project.toml`.
 
 Runtime Git commands are queries only. They run without optional locks,
 without inherited `GIT_*` redirections, and with external fsmonitor disabled.
+Global and system Git configuration are neutralized. Repositories that define
+configuration includes or content-filter sections are blocked before any Git
+query, preventing external clean/process filters and external includes.
 The Git root must equal the declared project root before status is inspected.
 Indirect `.git` files, including linked Git worktrees, are blocked by this
 first safety contract.

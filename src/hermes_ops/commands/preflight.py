@@ -38,6 +38,7 @@ def run_preflight(project: str | Path) -> Report:
                 "git_root_mismatch",
                 "git_declared_root_invalid",
                 "git_indirect_repository_unsupported",
+                "git_unsafe_local_config",
             }
             else item
             for item in git_results

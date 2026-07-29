@@ -22,6 +22,9 @@ def safe_git_environment(
     }
     environment.update(
         {
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_SYSTEM": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_OPTIONAL_LOCKS": "0",
             "GIT_TERMINAL_PROMPT": "0",
             "LC_ALL": "C",
@@ -29,4 +32,3 @@ def safe_git_environment(
         }
     )
     return environment
-

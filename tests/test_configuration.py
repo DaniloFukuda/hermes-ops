@@ -1,4 +1,6 @@
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -18,6 +20,7 @@ from hermes_ops.core.errors import (
     ConfigurationMissingError,
     ConfigurationSchemaError,
     ConfigurationSyntaxError,
+    ConfigurationUnsafePathError,
 )
 
 
@@ -157,3 +160,51 @@ def test_packaged_template_is_valid_and_compatible(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text("", encoding="utf-8")
     config = load_project_config(tmp_path)
     assert config.project.name == "example-project"
+
+
+def _create_directory_indirection(link: Path, target: Path) -> None:
+    if sys.platform == "win32":
+        completed = subprocess.run(
+            ("cmd", "/c", "mklink", "/J", str(link), str(target)),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            pytest.skip("Directory junctions are not available")
+    else:
+        link.symlink_to(target, target_is_directory=True)
+
+
+def test_configuration_parent_junction_is_rejected_before_read(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    outside = tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    (outside / "project.toml").write_text(
+        '[project]\nname = "must-not-load"\n',
+        encoding="utf-8",
+    )
+    _create_directory_indirection(root / ".hermes", outside)
+    with pytest.raises(ConfigurationUnsafePathError):
+        load_project_config(root)
+
+
+def test_configuration_file_symlink_is_rejected_before_read(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    outside = tmp_path / "outside.toml"
+    (root / ".hermes").mkdir(parents=True)
+    outside.write_text(
+        '[project]\nname = "must-not-load"\n',
+        encoding="utf-8",
+    )
+    try:
+        (root / ".hermes/project.toml").symlink_to(outside)
+    except OSError:
+        pytest.skip("File symlinks are not available")
+    with pytest.raises(ConfigurationUnsafePathError):
+        load_project_config(root)
