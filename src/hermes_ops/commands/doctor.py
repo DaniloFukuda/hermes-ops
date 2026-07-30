@@ -17,7 +17,7 @@ from hermes_ops.core.errors import (
 from hermes_ops.core.paths import resolve_directory
 from hermes_ops.core.platform_info import current_platform, python_is_compatible
 from hermes_ops.core.results import CheckResult, Report, Status
-from hermes_ops.git.inspector import GitInspector
+from hermes_ops.git.inspector import GitInspector, OPTIONAL_GIT_WARNING_CODES
 
 
 def run_doctor(project: str | Path) -> Report:
@@ -182,16 +182,19 @@ def run_doctor(project: str | Path) -> Report:
     )
     state = GitInspector().inspect(root)
     if state.error:
-        git_status = (
-            Status.BLOCKED
-            if state.error_code
-            in {
-                "git_root_mismatch",
-                "git_indirect_repository_unsupported",
-                "git_unsafe_local_config",
-            }
-            else Status.ERROR
-        )
+        if not config.git.required and state.error_code in OPTIONAL_GIT_WARNING_CODES:
+            git_status = Status.WARNING
+        else:
+            git_status = (
+                Status.BLOCKED
+                if state.error_code
+                in {
+                    "git_root_mismatch",
+                    "git_indirect_repository_unsupported",
+                    "git_unsafe_local_config",
+                }
+                else Status.ERROR
+            )
         results.append(
             CheckResult(
                 "git_repository",

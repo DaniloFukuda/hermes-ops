@@ -8,6 +8,7 @@ from hermes_ops.core.configuration import load_project_config
 from hermes_ops.core.errors import ConfigurationError, PathResolutionError
 from hermes_ops.core.paths import resolve_directory
 from hermes_ops.core.results import CheckResult, Report, Status
+from hermes_ops.git.inspector import OPTIONAL_GIT_WARNING_CODES
 
 
 def run_preflight(project: str | Path) -> Report:
@@ -46,6 +47,8 @@ def run_preflight(project: str | Path) -> Report:
     elif worktree.exit_code:
         git_results = [
             CheckResult(item.name, Status.WARNING, item.message, item.details, item.code)
+            if item.code in OPTIONAL_GIT_WARNING_CODES
+            else item
             for item in git_results
         ]
     results.extend(git_results)

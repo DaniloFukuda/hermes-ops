@@ -4,6 +4,18 @@ from conftest import git
 from hermes_ops.commands.doctor import run_doctor
 from hermes_ops.commands.preflight import run_preflight
 from hermes_ops.commands.worktree import run_worktree
+from hermes_ops.git.inspector import GitState
+
+
+def _make_git_optional(root: Path) -> None:
+    path = root / ".hermes/project.toml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "required = true",
+            "required = false",
+        ),
+        encoding="utf-8",
+    )
 
 
 def test_doctor_missing_path_is_blocked(tmp_path: Path) -> None:
@@ -57,3 +69,116 @@ def test_preflight_clean_tree_passes_after_tracking_config(
 ) -> None:
     report = run_preflight(committed_git_repo)
     assert report.exit_code == 0
+
+
+def test_optional_unavailable_git_is_warning_for_all_commands(
+    configured_project: Path,
+    monkeypatch,
+) -> None:
+    _make_git_optional(configured_project)
+    (configured_project / "pyproject.toml").write_text("", encoding="utf-8")
+    unavailable = GitState(
+        False,
+        False,
+        error="Git is unavailable",
+        error_code="git_unavailable",
+    )
+    monkeypatch.setattr(
+        "hermes_ops.commands.doctor.GitInspector.inspect",
+        lambda self, root: unavailable,
+    )
+    monkeypatch.setattr(
+        "hermes_ops.commands.worktree.GitInspector.inspect",
+        lambda self, root: unavailable,
+    )
+
+    for command in (run_doctor, run_worktree, run_preflight):
+        report = command(configured_project)
+        assert report.exit_code == 0
+        assert any(
+            item.code == "git_unavailable" and item.status.value == "AVISO"
+            for item in report.results
+        )
+
+
+def test_optional_git_outside_repository_is_warning(
+    configured_project: Path,
+) -> None:
+    _make_git_optional(configured_project)
+    (configured_project / "pyproject.toml").write_text("", encoding="utf-8")
+
+    for command in (run_doctor, run_worktree, run_preflight):
+        report = command(configured_project)
+        assert report.exit_code == 0
+        assert any(
+            item.code == "git_repository_missing"
+            and item.status.value == "AVISO"
+            for item in report.results
+        )
+
+
+def test_optional_git_doctor_error_does_not_leave_preflight_at_exit_one(
+    configured_project: Path,
+    monkeypatch,
+) -> None:
+    _make_git_optional(configured_project)
+    (configured_project / "pyproject.toml").write_text("", encoding="utf-8")
+    unavailable = GitState(
+        False,
+        False,
+        error="Git is unavailable",
+        error_code="git_unavailable",
+    )
+    monkeypatch.setattr(
+        "hermes_ops.commands.doctor.GitInspector.inspect",
+        lambda self, root: unavailable,
+    )
+    monkeypatch.setattr(
+        "hermes_ops.commands.worktree.GitInspector.inspect",
+        lambda self, root: unavailable,
+    )
+
+    report = run_preflight(configured_project)
+
+    assert report.exit_code == 0
+    assert not any(item.status.value == "ERRO" for item in report.results)
+
+
+def test_required_unavailable_git_remains_blocking(
+    configured_project: Path,
+    monkeypatch,
+) -> None:
+    (configured_project / "pyproject.toml").write_text("", encoding="utf-8")
+    unavailable = GitState(
+        False,
+        False,
+        error="Git is unavailable",
+        error_code="git_unavailable",
+    )
+    monkeypatch.setattr(
+        "hermes_ops.commands.doctor.GitInspector.inspect",
+        lambda self, root: unavailable,
+    )
+    monkeypatch.setattr(
+        "hermes_ops.commands.worktree.GitInspector.inspect",
+        lambda self, root: unavailable,
+    )
+
+    assert run_doctor(configured_project).exit_code != 0
+    assert run_worktree(configured_project).exit_code != 0
+    assert run_preflight(configured_project).exit_code == 3
+
+
+def test_unsafe_git_configuration_remains_blocked_when_git_is_optional(
+    empty_git_repo: Path,
+) -> None:
+    _make_git_optional(empty_git_repo)
+    git(empty_git_repo, "config", "include.path", "../external-config")
+
+    for command in (run_doctor, run_worktree, run_preflight):
+        report = command(empty_git_repo)
+        assert report.exit_code == 3
+        assert any(
+            item.code == "git_unsafe_local_config"
+            for item in report.results
+        )

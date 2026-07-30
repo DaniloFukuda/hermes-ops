@@ -17,6 +17,17 @@ from hermes_ops.git.parser import WorktreeChanges, parse_porcelain_v1_z
 
 Runner = Callable[..., ProcessResult]
 
+OPTIONAL_GIT_WARNING_CODES = frozenset(
+    {
+        "git_unavailable",
+        "git_repository_missing",
+        "git_operational_error",
+        "git_permission_denied",
+        "git_dubious_ownership",
+        "git_unexpected_output",
+    }
+)
+
 
 @dataclass(frozen=True, slots=True)
 class GitState:
@@ -210,6 +221,38 @@ class GitInspector:
                 error="Git configuration could not be read safely",
                 error_code="git_operational_error",
             )
+        unsafe = GitInspector._unsafe_config_text(text)
+        if unsafe is not None:
+            return unsafe
+        if not GitInspector._worktree_config_enabled(text):
+            return None
+        try:
+            worktree_config_path = direct_project_path(root, ".git/config.worktree")
+        except PathResolutionError:
+            return GitState(
+                True,
+                True,
+                error="Git worktree configuration uses an indirect filesystem entry",
+                error_code="git_unsafe_local_config",
+            )
+        if not worktree_config_path.is_file():
+            return None
+        try:
+            worktree_text = worktree_config_path.read_text(
+                encoding="utf-8",
+                errors="replace",
+            )
+        except OSError:
+            return GitState(
+                True,
+                True,
+                error="Git worktree configuration could not be read safely",
+                error_code="git_operational_error",
+            )
+        return GitInspector._unsafe_config_text(worktree_text)
+
+    @staticmethod
+    def _unsafe_config_text(text: str) -> GitState | None:
         section_pattern = re.compile(
             r"^\s*\[\s*([A-Za-z][A-Za-z0-9.-]*)",
             re.MULTILINE,
@@ -233,6 +276,25 @@ class GitInspector:
                 error_code="git_unsafe_local_config",
             )
         return None
+
+    @staticmethod
+    def _worktree_config_enabled(text: str) -> bool:
+        section_pattern = re.compile(
+            r"^\s*\[\s*([A-Za-z][A-Za-z0-9.-]*)",
+        )
+        setting_pattern = re.compile(
+            r"^\s*worktreeconfig\s*=\s*(true|yes|on|1)\s*(?:[#;].*)?$",
+            re.IGNORECASE,
+        )
+        section: str | None = None
+        for line in text.splitlines():
+            match = section_pattern.match(line)
+            if match is not None:
+                section = match.group(1).casefold()
+                continue
+            if section == "extensions" and setting_pattern.match(line):
+                return True
+        return False
 
     def _classify_probe_failure(self, result: ProcessResult) -> GitState:
         message = self._safe_git_error(result, "Git repository probe failed")
