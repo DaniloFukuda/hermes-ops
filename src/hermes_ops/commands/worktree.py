@@ -14,7 +14,7 @@ from hermes_ops.core.errors import (
 )
 from hermes_ops.core.paths import resolve_directory
 from hermes_ops.core.results import CheckResult, Report, Status
-from hermes_ops.git.inspector import GitInspector
+from hermes_ops.git.inspector import GitInspector, OPTIONAL_GIT_WARNING_CODES
 
 
 def run_worktree(project: str | Path) -> Report:
@@ -96,7 +96,7 @@ def run_worktree(project: str | Path) -> Report:
             [
                 CheckResult(
                     "git",
-                    Status.ERROR,
+                    Status.ERROR if config.git.required else Status.WARNING,
                     state.error or "Git is unavailable",
                     code=state.error_code or "git_unavailable",
                 )
@@ -104,14 +104,19 @@ def run_worktree(project: str | Path) -> Report:
         )
     if state.error:
         git_status = (
-            Status.BLOCKED
-            if state.error_code
-            in {
-                "git_root_mismatch",
-                "git_indirect_repository_unsupported",
-                "git_unsafe_local_config",
-            }
-            else Status.ERROR
+            Status.WARNING
+            if not config.git.required
+            and state.error_code in OPTIONAL_GIT_WARNING_CODES
+            else (
+                Status.BLOCKED
+                if state.error_code
+                in {
+                    "git_root_mismatch",
+                    "git_indirect_repository_unsupported",
+                    "git_unsafe_local_config",
+                }
+                else Status.ERROR
+            )
         )
         return Report.from_results(
             "worktree",
@@ -130,7 +135,7 @@ def run_worktree(project: str | Path) -> Report:
             [
                 CheckResult(
                     "git",
-                    Status.BLOCKED,
+                    Status.BLOCKED if config.git.required else Status.WARNING,
                     "The project is not a Git repository",
                     code="git_repository_missing",
                 )

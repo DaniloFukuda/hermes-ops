@@ -8,7 +8,7 @@ import sys
 from conftest import VALID_CONFIG, git
 from hermes_ops.core.processes import ProcessResult
 from hermes_ops.git.environment import safe_git_environment
-from hermes_ops.git.inspector import GitInspector
+from hermes_ops.git.inspector import GitInspector, GitState
 
 
 def make_repo(root: Path, *, commit: bool = True) -> Path:
@@ -252,6 +252,63 @@ def test_local_config_include_is_not_loaded(tmp_path: Path) -> None:
     state = GitInspector().inspect(target)
 
     assert state.error_code == "git_unsafe_local_config"
+
+
+def _inspect_with_worktree_config(
+    tmp_path: Path,
+    text: str,
+    *,
+    block_queries: bool = True,
+) -> GitState:
+    target = make_repo(tmp_path / "target")
+    git(target, "config", "extensions.worktreeConfig", "true")
+    (target / ".git/config.worktree").write_text(text, encoding="utf-8")
+
+    if not block_queries:
+        return GitInspector().inspect(target)
+
+    def forbidden_runner(*args, **kwargs):
+        raise AssertionError("Unsafe config.worktree must be blocked before Git runs")
+
+    return GitInspector(runner=forbidden_runner).inspect(target)
+
+
+def test_worktree_config_include_path_is_not_loaded(tmp_path: Path) -> None:
+    state = _inspect_with_worktree_config(
+        tmp_path,
+        '[include]\n\tpath = "../external-config"\n',
+    )
+
+    assert state.error_code == "git_unsafe_local_config"
+
+
+def test_worktree_config_include_if_is_not_loaded(tmp_path: Path) -> None:
+    state = _inspect_with_worktree_config(
+        tmp_path,
+        '[includeIf "gitdir:target"]\n\tpath = "../external-config"\n',
+    )
+
+    assert state.error_code == "git_unsafe_local_config"
+
+
+def test_worktree_config_filter_is_not_loaded(tmp_path: Path) -> None:
+    state = _inspect_with_worktree_config(
+        tmp_path,
+        '[filter "hostile"]\n\tclean = external-command\n',
+    )
+
+    assert state.error_code == "git_unsafe_local_config"
+
+
+def test_safe_worktree_config_has_no_false_positive(tmp_path: Path) -> None:
+    state = _inspect_with_worktree_config(
+        tmp_path,
+        "[core]\n\tautocrlf = false\n",
+        block_queries=False,
+    )
+
+    assert state.is_repository
+    assert state.error is None
 
 
 def test_clean_and_process_filters_are_not_executed(tmp_path: Path) -> None:
