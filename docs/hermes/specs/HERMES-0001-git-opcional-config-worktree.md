@@ -2,7 +2,14 @@
 
 ## Status
 
-Implementado em branch, aguardando integração
+Implementado
+
+**Integração:**
+- Commit original da implementação: `25cfc73`
+- Commit de integração na main: `327b667`
+- PR: #1
+- Data da integração: 2026-07-30
+- 8 checks de CI aprovados
 
 ## Resumo para o Responsável pelo Projeto
 
@@ -341,7 +348,11 @@ FUNÇÃO classificar_status_para_comando(state, config):
 
 | Campo | Valor |
 |-------|-------|
-| Commit | `25cfc737285d1f84e14c5f961494771ab659cf7b` |
+| Commit original | `25cfc737285d1f84e14c5f961494771ab659cf7b` |
+| Commit de integração na main | `327b667` |
+| PR | #1 |
+| Data da integração | 2026-07-30 |
+| Checks de CI | 8 aprovados |
 | Testes direcionados | `pytest tests/test_git_security.py tests/test_preflight.py -v` → 30 passed |
 | Suíte completa | `pytest` → 113 passed, 2 skipped (symlinks Windows), 3 errors (packaging - módulo `build` não instalado, não relacionado) |
 | compileall | `python -m compileall src/hermes_ops` → OK (sem erros de sintaxe) |
@@ -356,6 +367,7 @@ FUNÇÃO classificar_status_para_comando(state, config):
 |------|-------|-----------|------------|
 | 2026-07-30 | Danilo Fukuda | Criação da especificação baseada no commit 25cfc73 | Commit 25cfc73 |
 | 2026-07-30 | Danilo Fukuda | Adição de AC-12 (constante compartilhada) e evidências de validação | Análise do diff |
+| 2026-07-30 | Danilo Fukuda | Atualização de status para **Implementado** com registro de integração (PR #1, commit 327b667, 8 checks CI) | Integração na main |
 
 ---
 
