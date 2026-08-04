@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -37,7 +38,7 @@ _ALLOWED_AC_FIELDS: frozenset[str] = frozenset({
     "justification",
 })
 
-# Allowed fields in evidence
+# Allowed fields in evidence (canonical order for deterministic validation)
 _ALLOWED_EVIDENCE_FIELDS: frozenset[str] = frozenset({
     "Commit da implementação",
     "Estado da integração",
@@ -51,6 +52,21 @@ _ALLOWED_EVIDENCE_FIELDS: frozenset[str] = frozenset({
     "CI",
     "Limitações do ambiente",
 })
+
+# Canonical order for evidence fields (for deterministic validation order)
+_EVIDENCE_FIELD_ORDER: tuple[str, ...] = (
+    "Commit da implementação",
+    "Estado da integração",
+    "Arquivos alterados",
+    "Testes direcionados",
+    "Suíte completa",
+    "Validação de sintaxe ou compileall",
+    "Empacotamento",
+    "git diff --check",
+    "Plataformas e versões validadas",
+    "CI",
+    "Limitações do ambiente",
+)
 
 
 def _validate_schema_version(toml_data: dict[str, Any]) -> SchemaIssue | None:
@@ -103,17 +119,66 @@ def _validate_toplevel_fields(toml_data: dict[str, Any]) -> list[SchemaIssue]:
     return issues
 
 
+def _validate_toplevel_field_types(toml_data: dict[str, Any]) -> list[SchemaIssue]:
+    """Validate types of known top-level fields."""
+    issues = []
+
+    # id must be string
+    if "id" in toml_data and not isinstance(toml_data["id"], str):
+        issues.append(SchemaIssue(
+            code="invalid_field_type",
+            field="id",
+            message="id must be a string",
+        ))
+
+    # status must be string
+    if "status" in toml_data and not isinstance(toml_data["status"], str):
+        issues.append(SchemaIssue(
+            code="invalid_field_type",
+            field="status",
+            message="status must be a string",
+        ))
+
+    # superseded_by must be string when present
+    if "superseded_by" in toml_data and not isinstance(toml_data["superseded_by"], str):
+        issues.append(SchemaIssue(
+            code="invalid_field_type",
+            field="superseded_by",
+            message="superseded_by must be a string",
+        ))
+
+    return issues
+
+
 def _validate_acceptance_criteria(toml_data: dict[str, Any]) -> list[SchemaIssue]:
-    """Validate acceptance_criteria fields if present and is list of mappings."""
+    """Validate acceptance_criteria structure and field types."""
     issues = []
     ac = toml_data.get("acceptance_criteria")
+
+    # Container type validation
+    if ac is not None and not isinstance(ac, list):
+        issues.append(SchemaIssue(
+            code="invalid_acceptance_criteria_type",
+            field="acceptance_criteria",
+            message="acceptance_criteria must be a list",
+        ))
+        return issues  # Do not validate items when container type is invalid
+
     if not isinstance(ac, list):
-        return issues  # Not a list, defer structural validation to later block
+        return issues  # Not a list (or absent), defer to later blocks
 
+    # Validate each item
     for idx, item in enumerate(ac):
-        if not isinstance(item, dict):
-            continue  # Defer structural validation to later block
+        # Item type validation
+        if not isinstance(item, Mapping):
+            issues.append(SchemaIssue(
+                code="invalid_acceptance_criterion_type",
+                field=f"acceptance_criteria[{idx}]",
+                message=f"acceptance_criteria[{idx}] must be a mapping",
+            ))
+            continue  # Continue to next item, don't validate fields of invalid item
 
+        # Unknown fields (alphabetical order)
         unknown_fields = sorted(set(item.keys()) - _ALLOWED_AC_FIELDS)
         for field in unknown_fields:
             issues.append(SchemaIssue(
@@ -121,16 +186,57 @@ def _validate_acceptance_criteria(toml_data: dict[str, Any]) -> list[SchemaIssue
                 field=f"acceptance_criteria[{idx}].{field}",
                 message=f"Unknown field in acceptance_criteria[{idx}]: {field}",
             ))
+
+        # Known field types (in specified order)
+        if "id" in item and not isinstance(item["id"], str):
+            issues.append(SchemaIssue(
+                code="invalid_field_type",
+                field=f"acceptance_criteria[{idx}].id",
+                message="acceptance_criteria[i].id must be a string",
+            ))
+
+        if "test_file" in item and not isinstance(item["test_file"], str):
+            issues.append(SchemaIssue(
+                code="invalid_field_type",
+                field=f"acceptance_criteria[{idx}].test_file",
+                message="acceptance_criteria[i].test_file must be a string",
+            ))
+
+        if "test_function" in item and not isinstance(item["test_function"], str):
+            issues.append(SchemaIssue(
+                code="invalid_field_type",
+                field=f"acceptance_criteria[{idx}].test_function",
+                message="acceptance_criteria[i].test_function must be a string",
+            ))
+
+        if "justification" in item and not isinstance(item["justification"], str):
+            issues.append(SchemaIssue(
+                code="invalid_field_type",
+                field=f"acceptance_criteria[{idx}].justification",
+                message="acceptance_criteria[i].justification must be a string",
+            ))
+
     return issues
 
 
 def _validate_evidence(toml_data: dict[str, Any]) -> list[SchemaIssue]:
-    """Validate evidence fields if present and is a mapping."""
+    """Validate evidence structure and field types."""
     issues = []
     evidence = toml_data.get("evidence")
-    if not isinstance(evidence, dict):
-        return issues  # Not a mapping, defer structural validation to later block
 
+    # Container type validation
+    if evidence is not None and not isinstance(evidence, Mapping):
+        issues.append(SchemaIssue(
+            code="invalid_evidence_type",
+            field="evidence",
+            message="evidence must be a mapping",
+        ))
+        return issues  # Do not validate fields when container type is invalid
+
+    if not isinstance(evidence, Mapping):
+        return issues  # Not a mapping (or absent), defer to later blocks
+
+    # Unknown fields (alphabetical order)
     unknown_fields = sorted(set(evidence.keys()) - _ALLOWED_EVIDENCE_FIELDS)
     for field in unknown_fields:
         issues.append(SchemaIssue(
@@ -138,6 +244,16 @@ def _validate_evidence(toml_data: dict[str, Any]) -> list[SchemaIssue]:
             field=f"evidence.{field}",
             message=f"Unknown field in evidence: {field}",
         ))
+
+    # Known field types (in canonical order for determinism)
+    for field_name in _EVIDENCE_FIELD_ORDER:
+        if field_name in evidence and not isinstance(evidence[field_name], str):
+            issues.append(SchemaIssue(
+                code="invalid_field_type",
+                field=f"evidence.{field_name}",
+                message=f"evidence.{field_name} must be a string",
+            ))
+
     return issues
 
 
@@ -151,8 +267,17 @@ def validate_spec_schema(toml_data: dict[str, Any]) -> tuple[SchemaIssue, ...]:
         Tuple of SchemaIssue objects in deterministic order:
         1. schema_version issues (if any)
         2. Unknown top-level fields (alphabetical)
-        3. acceptance_criteria issues (by item index, fields alphabetical)
-        4. evidence issues (alphabetical)
+        3. Types of known top-level fields (id, status, superseded_by)
+        4. acceptance_criteria:
+           - container type error when applicable
+           - items in original order
+           - for Mapping items:
+             a. unknown fields alphabetical
+             b. known field types in order: id, test_file, test_function, justification
+        5. evidence:
+           - container type error when applicable
+           - unknown fields alphabetical
+           - known field types in canonical order
 
     Does not modify toml_data. Returns all detectable issues for this block.
     Does not raise exceptions for expected document errors.
@@ -166,13 +291,16 @@ def validate_spec_schema(toml_data: dict[str, Any]) -> tuple[SchemaIssue, ...]:
         # When schema_version is invalid, do not apply closed-field rules
         return tuple(issues)
 
-    # 2. Top-level unknown fields (alphabetical)
+    # 2. Unknown top-level fields (alphabetical)
     issues.extend(_validate_toplevel_fields(toml_data))
 
-    # 3. acceptance_criteria (by index, fields alphabetical)
+    # 3. Types of known top-level fields (id, status, superseded_by)
+    issues.extend(_validate_toplevel_field_types(toml_data))
+
+    # 4. acceptance_criteria
     issues.extend(_validate_acceptance_criteria(toml_data))
 
-    # 4. evidence (alphabetical)
+    # 5. evidence
     issues.extend(_validate_evidence(toml_data))
 
     return tuple(issues)

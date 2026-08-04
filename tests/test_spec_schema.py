@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-
+from collections.abc import Mapping
 from hermes_ops.core.errors import SpecParsingError
 from hermes_ops.core.hybrid_parser import parse_hybrid_text
 from hermes_ops.core.spec_schema import SchemaIssue, validate_spec_schema
@@ -97,6 +97,41 @@ class TestToplevelFields:
         }
         issues = validate_spec_schema(toml_data)
         assert len(issues) == 0
+
+    def test_toplevel_id_must_be_string(self) -> None:
+        """Non-string id returns invalid_field_type."""
+        toml_data = {"schema_version": 1, "id": 123}
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_field_type"]
+        assert len(type_issues) == 1
+        assert type_issues[0].field == "id"
+        assert type_issues[0].message == "id must be a string"
+
+    def test_toplevel_status_must_be_string(self) -> None:
+        """Non-string status returns invalid_field_type."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": 42}
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_field_type"]
+        assert len(type_issues) == 1
+        assert type_issues[0].field == "status"
+        assert type_issues[0].message == "status must be a string"
+
+    def test_toplevel_superseded_by_must_be_string(self) -> None:
+        """Non-string superseded_by returns invalid_field_type."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "superseded_by": 999}
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_field_type"]
+        assert len(type_issues) == 1
+        assert type_issues[0].field == "superseded_by"
+        assert type_issues[0].message == "superseded_by must be a string"
+
+    def test_toplevel_unknown_field_still_reported(self) -> None:
+        """Unknown top-level fields still reported alongside type errors."""
+        toml_data = {"schema_version": 1, "id": 123, "unknown": "value"}
+        issues = validate_spec_schema(toml_data)
+        codes = [i.code for i in issues]
+        assert "invalid_field_type" in codes
+        assert "unknown_field_toplevel" in codes
 
     def test_unknown_toplevel_field(self) -> None:
         """Single unknown top-level field returns unknown_field_toplevel."""
@@ -212,6 +247,97 @@ class TestAcceptanceCriteriaFields:
         assert len(ac_issues) == 0
 
 
+    def test_ac_non_list_returns_invalid_acceptance_criteria_type(self) -> None:
+        """Non-list acceptance_criteria returns invalid_acceptance_criteria_type."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "acceptance_criteria": "not a list"}
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_acceptance_criteria_type"]
+        assert len(type_issues) == 1
+        assert type_issues[0].field == "acceptance_criteria"
+        assert type_issues[0].message == "acceptance_criteria must be a list"
+
+    def test_ac_non_list_does_not_validate_items(self) -> None:
+        """When acceptance_criteria is not a list, no item-level errors produced."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "acceptance_criteria": "not a list"}
+        issues = validate_spec_schema(toml_data)
+        # Should only have the container type error, no unknown_field_ac or invalid_acceptance_criterion_type
+        codes = [i.code for i in issues]
+        assert codes == ["invalid_acceptance_criteria_type"]
+
+
+    def test_ac_non_mapping_item_returns_invalid_acceptance_criterion_type(self) -> None:
+        """Non-mapping AC item returns invalid_acceptance_criterion_type."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "acceptance_criteria": ["not a mapping", 123]}
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_acceptance_criterion_type"]
+        assert len(type_issues) == 2
+        assert type_issues[0].field == "acceptance_criteria[0]"
+        assert type_issues[1].field == "acceptance_criteria[1]"
+        assert type_issues[0].message == "acceptance_criteria[0] must be a mapping"
+        assert type_issues[1].message == "acceptance_criteria[1] must be a mapping"
+
+    def test_ac_non_mapping_item_does_not_validate_fields(self) -> None:
+        """When AC item is not a mapping, no field-level errors produced for that item."""
+        toml_data = {
+            "schema_version": 1,
+            "id": "HERMES-0001",
+            "acceptance_criteria": [{"id": "AC-01"}, "not a mapping", {"id": "AC-02", "unknown_field": "value"}]
+        }
+        issues = validate_spec_schema(toml_data)
+        codes = [i.code for i in issues]
+        # Should have: invalid_acceptance_criterion_type for item[1], unknown_field_ac for item[2]
+        assert "invalid_acceptance_criterion_type" in codes
+        assert "unknown_field_ac" in codes
+        # But no invalid_field_type for item[1] (since it's not a mapping)
+        type_issues = [i for i in issues if i.code == "invalid_field_type"]
+        assert len(type_issues) == 0  # id in item[0] and item[2] are strings, no unknown fields in item[0]
+
+
+    def test_ac_id_must_be_string(self) -> None:
+        """Non-string id in AC returns invalid_field_type."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "acceptance_criteria": [{"id": 123}]}
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_field_type"]
+        assert len(type_issues) == 1
+        assert type_issues[0].field == "acceptance_criteria[0].id"
+        assert type_issues[0].message == "acceptance_criteria[i].id must be a string"
+
+    def test_ac_test_file_must_be_string(self) -> None:
+        """Non-string test_file in AC returns invalid_field_type."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "acceptance_criteria": [{"test_file": 42}]}
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_field_type"]
+        assert len(type_issues) == 1
+        assert type_issues[0].field == "acceptance_criteria[0].test_file"
+        assert type_issues[0].message == "acceptance_criteria[i].test_file must be a string"
+
+    def test_ac_test_function_must_be_string(self) -> None:
+        """Non-string test_function in AC returns invalid_field_type."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "acceptance_criteria": [{"test_function": 99}]}
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_field_type"]
+        assert len(type_issues) == 1
+        assert type_issues[0].field == "acceptance_criteria[0].test_function"
+        assert type_issues[0].message == "acceptance_criteria[i].test_function must be a string"
+
+    def test_ac_justification_must_be_string(self) -> None:
+        """Non-string justification in AC returns invalid_field_type."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "acceptance_criteria": [{"justification": 7}]}
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_field_type"]
+        assert len(type_issues) == 1
+        assert type_issues[0].field == "acceptance_criteria[0].justification"
+        assert type_issues[0].message == "acceptance_criteria[i].justification must be a string"
+
+    def test_ac_unknown_fields_and_type_errors_reported_together(self) -> None:
+        """Unknown fields and type errors in same AC reported together."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "acceptance_criteria": [{"id": 123, "unknown": "value"}]}
+        issues = validate_spec_schema(toml_data)
+        codes = [i.code for i in issues]
+        assert "invalid_field_type" in codes
+        assert "unknown_field_ac" in codes
+
+
 class TestEvidenceFields:
     """Tests for evidence allowed/unknown fields."""
 
@@ -282,6 +408,98 @@ class TestEvidenceFields:
         assert len(ev_issues) == 0
 
 
+    def test_evidence_non_mapping_returns_invalid_evidence_type(self) -> None:
+        """Non-mapping evidence returns invalid_evidence_type."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "evidence": "not a mapping"}
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_evidence_type"]
+        assert len(type_issues) == 1
+        assert type_issues[0].field == "evidence"
+        assert type_issues[0].message == "evidence must be a mapping"
+
+    def test_evidence_non_mapping_does_not_validate_fields(self) -> None:
+        """When evidence is not a mapping, no field-level errors produced."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "evidence": "not a mapping"}
+        issues = validate_spec_schema(toml_data)
+        codes = [i.code for i in issues]
+        # Should only have the container type error, no unknown_field_evidence or invalid_field_type
+        assert codes == ["invalid_evidence_type"]
+
+
+    def test_evidence_commit_must_be_string(self) -> None:
+        """Non-string 'Commit da implementação' in evidence returns invalid_field_type."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "evidence": {"Commit da implementação": 123}}
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_field_type"]
+        assert len(type_issues) == 1
+        assert type_issues[0].field == "evidence.Commit da implementação"
+        assert type_issues[0].message == "evidence.Commit da implementação must be a string"
+
+    def test_evidence_estado_integracao_must_be_string(self) -> None:
+        """Non-string 'Estado da integração' in evidence returns invalid_field_type."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "evidence": {"Estado da integração": 42}}
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_field_type"]
+        assert len(type_issues) == 1
+        assert type_issues[0].field == "evidence.Estado da integração"
+        assert type_issues[0].message == "evidence.Estado da integração must be a string"
+
+    def test_evidence_arquivos_alterados_must_be_string(self) -> None:
+        """Non-string 'Arquivos alterados' in evidence returns invalid_field_type."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "evidence": {"Arquivos alterados": 99}}
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_field_type"]
+        assert len(type_issues) == 1
+        assert type_issues[0].field == "evidence.Arquivos alterados"
+        assert type_issues[0].message == "evidence.Arquivos alterados must be a string"
+
+    def test_evidence_all_field_types_in_canonical_order(self) -> None:
+        """All evidence field types validated in canonical order."""
+        toml_data = {
+            "schema_version": 1,
+            "id": "HERMES-0001",
+            "evidence": {
+                "Commit da implementação": 1,
+                "Estado da integração": 2,
+                "Arquivos alterados": 3,
+                "Testes direcionados": 4,
+                "Suíte completa": 5,
+                "Validação de sintaxe ou compileall": 6,
+                "Empacotamento": 7,
+                "git diff --check": 8,
+                "Plataformas e versões validadas": 9,
+                "CI": 10,
+                "Limitações do ambiente": 11,
+            }
+        }
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_field_type"]
+        assert len(type_issues) == 11
+        # Check they're in canonical order
+        expected_order = [
+            "evidence.Commit da implementação",
+            "evidence.Estado da integração",
+            "evidence.Arquivos alterados",
+            "evidence.Testes direcionados",
+            "evidence.Suíte completa",
+            "evidence.Validação de sintaxe ou compileall",
+            "evidence.Empacotamento",
+            "evidence.git diff --check",
+            "evidence.Plataformas e versões validadas",
+            "evidence.CI",
+            "evidence.Limitações do ambiente",
+        ]
+        assert [i.field for i in type_issues] == expected_order
+
+    def test_evidence_unknown_fields_and_type_errors_reported_together(self) -> None:
+        """Unknown fields and type errors in evidence reported together."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "evidence": {"Commit da implementação": 123, "unknown": "value"}}
+        issues = validate_spec_schema(toml_data)
+        codes = [i.code for i in issues]
+        assert "invalid_field_type" in codes
+        assert "unknown_field_evidence" in codes
+
+
 class TestBehavioralContracts:
     """Tests for behavioral contracts: immutability, determinism, precedence."""
 
@@ -342,6 +560,84 @@ class TestBehavioralContracts:
         assert len(issues) == 1
         assert issues[0].code == "unsupported_schema_version"
         # No unknown_field_toplevel should be produced
+
+
+    def test_invalid_schema_version_type_blocks_secondary_errors(self) -> None:
+        """Invalid schema_version type prevents unknown field errors."""
+        toml_data = {
+            "schema_version": "1",  # string instead of int
+            "id": "HERMES-0001",
+            "unknown_field": "value",
+        }
+        issues = validate_spec_schema(toml_data)
+        assert len(issues) == 1
+        assert issues[0].code == "invalid_schema_version_type"
+        # No unknown_field_toplevel should be produced
+
+
+    def test_invalid_schema_version_value_blocks_secondary_errors(self) -> None:
+        """Invalid schema_version value prevents unknown field errors."""
+        toml_data = {
+            "schema_version": 0,  # invalid value
+            "id": "HERMES-0001",
+            "unknown_field": "value",
+        }
+        issues = validate_spec_schema(toml_data)
+        assert len(issues) == 1
+        assert issues[0].code == "invalid_schema_version_value"
+        # No unknown_field_toplevel should be produced
+
+
+    def test_missing_schema_version_blocks_secondary_errors(self) -> None:
+        """Missing schema_version prevents unknown field errors."""
+        toml_data = {
+            "id": "HERMES-0001",
+            "unknown_field": "value",
+        }
+        issues = validate_spec_schema(toml_data)
+        assert len(issues) == 1
+        assert issues[0].code == "missing_schema_version"
+        # No unknown_field_toplevel should be produced
+
+
+    def test_unknown_table_never_emitted(self) -> None:
+        """unknown_table code is never emitted by validate_spec_schema."""
+        # Test various invalid structures that might trigger "unknown table" logic
+        test_cases = [
+            {"schema_version": 1, "id": "HERMES-0001", "acceptance_criteria": {}},  # dict instead of list
+            {"schema_version": 1, "id": "HERMES-0001", "evidence": []},  # list instead of mapping
+            {"schema_version": 1, "id": "HERMES-0001", "acceptance_criteria": ["not a mapping"]},
+        ]
+        for toml_data in test_cases:
+            issues = validate_spec_schema(toml_data)
+            codes = [i.code for i in issues]
+            assert "unknown_table" not in codes, f"unknown_table found in {codes}"
+            # Should emit specific container type errors instead
+            assert any(c in codes for c in ["invalid_acceptance_criteria_type", "invalid_evidence_type", "invalid_acceptance_criterion_type"]), f"Expected container type error in {codes}"
+
+
+    def test_global_deterministic_order_with_new_errors(self) -> None:
+        """Global order includes new error types in correct sequence."""
+        toml_data = {
+            "schema_version": 1,
+            "id": 123,  # type error
+            "status": 456,  # type error
+            "unknown_top": "value",  # unknown field
+            "acceptance_criteria": "not a list",  # container type error
+            "evidence": "not a mapping",  # container type error
+        }
+        issues = validate_spec_schema(toml_data)
+        codes = [i.code for i in issues]
+        # Expected order: unknown_field_toplevel, invalid_field_type (id), invalid_field_type (status),
+        # invalid_acceptance_criteria_type, invalid_evidence_type
+        expected = [
+            "unknown_field_toplevel",
+            "invalid_field_type",  # id
+            "invalid_field_type",  # status
+            "invalid_acceptance_criteria_type",
+            "invalid_evidence_type",
+        ]
+        assert codes == expected
 
     def test_parser_still_treats_duplicate_key_as_invalid_hybrid_format(self) -> None:
         """Parser still rejects duplicate TOML keys as invalid_hybrid_format."""
