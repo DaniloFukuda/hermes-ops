@@ -191,6 +191,13 @@ Regra universal:
 
 - `test_function` sem `test_file` é inválido.
 
+Para `Implementado`, a `justification` deve conter três elementos verificáveis:
+razão objetiva, método de validação e referência verificável. A validação inicial
+pode usar política determinística mínima, cuja heurística concreta deverá ser
+especificada antes da implementação do Bloco 3C. Comprimento do texto, sozinho,
+não comprova validade; não se usa IA nem interpretação subjetiva. Não é criado
+nesta versão um novo formato TOML estruturado para a justificativa.
+
 **Divergências TOML versus Markdown (ERROR documental, exit code isolado 1):**
 
 As seguintes inconsistências entre o front matter TOML e o corpo Markdown são tratadas como **ERROR documental**, código público (nomes definitivos pendentes), exit code isolado **1**, sem traceback, sem uso de `BLOCKED`, sem prefixo `config_`. Quando a inconsistência impede validação do documento, o arquivo atual é pulado e a inspeção continua nos demais documentos.
@@ -255,6 +262,51 @@ Os seguintes tipos são definidos para o schema versão 1:
 - `evidence`: tabela/mapping quando presente
 - Cada valor permitido de `evidence`: string
 
+**Contrato semântico obrigatório do front matter (Bloco 3):**
+
+Validações locais do TOML (responsabilidade de `validate_spec_schema`):
+
+- `id` é obrigatório e deve ser string no formato canônico `HERMES-NNNN`, com
+  prefixo maiúsculo e exatamente quatro dígitos. Ausência usa
+  `missing_toml_id`; tipo incorreto usa `invalid_field_type`; string com formato
+  estrutural inválido (não corresponde a `^HERMES-\d{4}$`) usa
+  `invalid_toml_id`; forma estruturalmente reconhecível com capitalização
+  não canônica usa `non_canonical_capitalization`. Sem `id` válido, não se
+  executam validações cruzadas de identidade e o documento é pulado quando a
+  identidade for indispensável.
+- `status` é obrigatório e deve ser uma das formas canônicas `Rascunho`,
+  `Aprovado`, `Em implementação`, `Implementado` ou `Substituído`. Ausência usa
+  `missing_toml_status`; tipo incorreto usa `invalid_field_type`; string fora do
+  conjunto permitido usa `invalid_status`; variação apenas de capitalização
+  usa `non_canonical_capitalization`. O documento pode continuar após ausência ou
+  valor inválido, mas regras condicionais ao status são puladas; tipo incorreto
+  não produz erros semânticos em cascata.
+- `acceptance_criteria` é obrigatório, deve ser uma lista e deve conter pelo
+  menos um item. Ausência usa `missing_acceptance_criteria`; tipo incorreto usa
+  `invalid_field_type`; lista vazia usa `empty_acceptance_criteria`.
+- Cada item de `acceptance_criteria` exige `id` string no formato canônico
+  `AC-NN`, com prefixo maiúsculo e exatamente dois dígitos. Ausência de `id` no
+  item usa `missing_ac_id` (reservado ao Bloco 3B); tipo incorreto usa
+  `invalid_field_type`; formato estrutural inválido usa `invalid_ac_id`
+  (reservado ao Bloco 3B); variação apenas de capitalização usa
+  `non_canonical_capitalization`. O primeiro item deve ser `AC-01` e os IDs
+  devem ser únicos (`ac_duplicate`). A descrição humana permanece no Markdown.
+- A continuidade completa dos ACs não é validada neste bloco: `AC-01, AC-03`
+  não gera WARNING nem ERROR. A política de gaps permanece adiada para decisão
+  própria. `ac_order_mismatch` fica reservado à comparação futura da ordem TOML
+  versus Markdown.
+- `superseded_by` é obrigatório somente em `Substituído`, deve ser string e seu
+  valor canônico é o identificador curto `HERMES-NNNN`. Ausência usa
+  `missing_superseded_by`, tipo incorreto usa `invalid_field_type` e formato
+  inválido usa `invalid_superseded_by_format`. O TOML é a fonte estrutural
+  canônica; o Markdown pode espelhar o valor. Nome completo de arquivo não é
+  valor canônico. A resolução para arquivo e `superseded_by_mismatch` pertencem
+  às validações cruzadas futuras.
+- `evidence` é obrigatório somente em `Implementado`: container ausente usa
+  `missing_evidence_toml`, campo interno obrigatório ausente usa
+  `missing_evidence_field` e tipo incorreto usa `invalid_field_type`.
+  `Substituído` não exige novas evidências, mas pode preservar as históricas.
+
 **Códigos públicos para validação de tipos estruturais (Bloco 2B):**
 
 A. **invalid_field_type**
@@ -263,25 +315,19 @@ Usado para tipo incorreto em:
 - `id`
 - `status`
 - `superseded_by`
+- container `acceptance_criteria`
 - `acceptance_criteria[i].id`
 - `acceptance_criteria[i].test_file`
 - `acceptance_criteria[i].test_function`
 - `acceptance_criteria[i].justification`
+- container `evidence`
 - valores de `evidence`
 
 O campo/localização no `SchemaIssue` identifica exatamente o item inválido.
 
-B. **invalid_acceptance_criteria_type**
-
-Usado quando `acceptance_criteria` não é lista/array.
-
-C. **invalid_acceptance_criterion_type**
+B. **invalid_acceptance_criterion_type**
 
 Usado quando `acceptance_criteria[i]` não é tabela/mapping.
-
-D. **invalid_evidence_type**
-
-Usado quando `evidence` não é tabela/mapping.
 
 Não criar códigos diferentes por campo individual.
 
@@ -289,14 +335,14 @@ Não criar códigos diferentes por campo individual.
 
 - `schema_version` inválido continua interrompendo as regras da versão 1.
 - `acceptance_criteria` com tipo inválido:
-  - emitir `invalid_acceptance_criteria_type`;
+  - emitir `invalid_field_type`;
   - não validar itens ou campos internos.
 - Item de AC com tipo inválido:
   - emitir `invalid_acceptance_criterion_type`;
   - continuar para os demais itens;
   - não emitir erros internos para aquele item.
 - `evidence` com tipo inválido:
-  - emitir `invalid_evidence_type`;
+  - emitir `invalid_field_type`;
   - não validar campos ou valores internos.
 - Campo com tipo inválido:
   - emitir `invalid_field_type`;
@@ -544,13 +590,34 @@ CONSTANTES:
 
     FUNÇÃO VALIDAR_ACS_HYBRID(toml_acs, markdown_acs, spec_id):
         results = []
+        PARA índice, ac EM ENUMERAR(toml_acs):
+            SE "id" NÃO EXISTE EM ac:
+                results.ADICIONAR(CheckResult("ac:" + índice, ERRO,
+                    "id do critério ausente", code="missing_ac_id"))
+                CONTINUAR
+            id = ac.OBTER("id")
+            SE id NÃO É STRING:
+                results.ADICIONAR(CheckResult("ac:" + índice, ERRO,
+                    "id do critério deve ser string", code="invalid_field_type"))
+                CONTINUAR
+            SE id CORRESPONDE ^ac-\\d{2}$:
+                            results.ADICIONAR(CheckResult("ac:" + índice, ERRO,
+                                "capitalização não canônica do AC", code="non_canonical_capitalization"))
+                            CONTINUAR
+                        SE id NÃO CORRESPONDE ^AC-\\d{2}$:
+                            results.ADICIONAR(CheckResult("ac:" + índice, ERRO,
+                                "formato estrutural inválido do AC", code="invalid_ac_id_format"))
+                    SE toml_acs[0].OBTER("id") != "AC-01":
+                        results.ADICIONAR(CheckResult("ac:first", ERRO,
+                            "o primeiro critério deve ser AC-01", code="invalid_ac_id"))
         # Mapa por ID para comparação
+        toml_id_list = [ac.OBTER("id") PARA ac EM toml_acs SE ac.OBTER("id") NÃO É NULO]
         toml_by_id = {ac.OBTER("id"): ac PARA ac EM toml_acs SE ac.OBTER("id") NÃO É NULO}
         md_by_id = {ac.OBTER("id"): ac PARA ac EM markdown_acs SE ac.OBTER("id") NÃO É NULO}
         toml_ids = list(toml_by_id.CHAVES())
         md_ids = list(md_by_id.CHAVES())
         # AC duplicado no TOML
-        SE len(toml_ids) != len(set(toml_ids)):
+        SE len(toml_id_list) != len(set(toml_id_list)):
             results.ADICIONAR(CheckResult("ac:duplicate", ERRO, "AC duplicado no TOML", code="ac_duplicate"))
         # AC duplicado no Markdown
         SE len(md_ids) != len(set(md_ids)):
@@ -572,6 +639,7 @@ CONSTANTES:
             results.ADICIONAR(CheckResult("ac:order_mismatch", ERRO,
                 "ordem dos ACs diferente entre TOML e Markdown",
                 code="ac_order_mismatch"))
+        # Não validar gaps neste bloco. AC-01, AC-03 não gera resultado por gap.
         # ID/status capitalização não canônica (verifica padrão AC-NN)
         PARA id EM toml_ids + md_ids:
             SE NÃO id CORRESPONDE ^AC-\\d{2}$:
@@ -602,11 +670,10 @@ CONSTANTES:
         SE MARCADOR_REJEITADO(justification):
             RETORNAR FALSO
         SE status == "Implementado":
-            # Deve conter 3 elementos: razão objetiva, método, referência verificável
-            # Heurística simples: contém "—" separando partes, tem referência a docs/evidencias ou arquivo
-            TEM_RAZAO = justification.CONTÉM("—") OU justification.CONTÉM("-")
-            TEM_REFERENCIA = justification.CONTÉM("docs/") OU justification.CONTÉM("evidencias/") OU justification.CONTÉM(".md")
-            RETORNAR TEM_RAZAO E TEM_REFERENCIA
+            # Exige razão objetiva, método de validação e referência verificável.
+            # A política determinística mínima será especificada antes do Bloco 3C;
+            # não usar IA, interpretação subjetiva ou comprimento isolado.
+            RETORNAR APLICAR_POLITICA_DETERMINISTICA_DO_BLOCO_3C(justification)
         RETORNAR VERDADEIRO  # Para outros status, justification não vazia e não rejeitada é válida
 
     FUNÇÃO VALIDAR_VINCULO_TESTE_HYBRID(ac_id, spec_id, test_file, test_function, justification, test_markers, toml_status):
@@ -619,11 +686,25 @@ CONSTANTES:
                 "test_file e justification são mutuamente exclusivos",
                 code="test_justification_both")
 
+        SE test_function NÃO É NULO E test_function != "" E NÃO TEM_TESTE:
+            RETORNAR CheckResult("teste:" + ac_id, ERRO,
+                "test_function só pode existir junto de test_file",
+                code="test_function_without_file")
+
         SE TEM_TESTE:
-            SE test_function NÃO É NULO E test_function != "":
+            SE test_file NÃO É STRING:
                 RETORNAR CheckResult("teste:" + ac_id, ERRO,
-                    "test_function só pode existir junto de test_file",
-                    code="test_function_without_file")
+                    "test_file deve ser string", code="invalid_field_type")
+            # Ordem de prevenção de cascata: segurança, existência, função.
+            SE CAMINHO_INSEGURO(test_file):
+                RETORNAR CheckResult("teste:" + ac_id, BLOQUEADO,
+                    "caminho de teste inseguro", code="unsafe_path")
+            SE ARQUIVO_NÃO_EXISTE(test_file):
+                RETORNAR CheckResult("teste:" + ac_id, ERRO,
+                    "arquivo de teste inexistente", code="test_file_missing")
+            SE test_function NÃO É NULO E test_function != "" E FUNÇÃO_NÃO_EXISTE(test_file, test_function):
+                RETORNAR CheckResult("teste:" + ac_id, ERRO,
+                    "função indicada não existe no arquivo", code="test_function_missing")
             # Validar se teste existe nos marcadores
             key = spec_id + "/" + ac_id
             SE key EM test_markers:
@@ -705,6 +786,18 @@ CONSTANTES:
                 result = CheckResult("identificador:toml", ERRO, "campo 'id' ausente no front matter TOML", code="missing_toml_id")
                 all_results.ADICIONAR(result)
                 CONTINUAR
+            SE toml_id NÃO É STRING:
+                all_results.ADICIONAR(CheckResult("identificador:toml", ERRO,
+                    "campo 'id' deve ser string", code="invalid_field_type"))
+                CONTINUAR
+            SE toml_id CORRESPONDE ^hermes-\d{4}$:
+                all_results.ADICIONAR(CheckResult("identificador:toml", ERRO,
+                    "capitalização não canônica do id", code="non_canonical_capitalization"))
+                CONTINUAR
+            SE toml_id NÃO CORRESPONDE ^HERMES-\d{4}$:
+                all_results.ADICIONAR(CheckResult("identificador:toml", ERRO,
+                    "formato estrutural inválido do id", code="invalid_toml_id"))
+                CONTINUAR
             SE toml_id != file_spec_id:
                 result = CheckResult("identificador", ERRO,
                                      "id no TOML (" + toml_id + ") difere do nome do arquivo (" + file_spec_id + ")",
@@ -769,8 +862,12 @@ CONSTANTES:
             SE toml_status É NULO:
                 result = CheckResult("status:toml", ERRO, "campo 'status' ausente no front matter TOML", code="missing_toml_status")
                 all_results.ADICIONAR(result)
+            SENÃO SE toml_status NÃO É STRING:
+                all_results.ADICIONAR(CheckResult("status:toml", ERRO,
+                    "campo 'status' deve ser string", code="invalid_field_type"))
+                CONTINUAR
             SENÃO SE toml_status NÃO EM VALID_STATUSES:
-                result = CheckResult("status:toml", ERRO, "status inválido no TOML: " + toml_status, code="invalid_toml_status")
+                result = CheckResult("status:toml", ERRO, "status inválido no TOML: " + toml_status, code="invalid_status")
                 all_results.ADICIONAR(result)
             SENÃO:
                 result = CheckResult("status:toml", OK, "status válido no TOML (" + toml_status + ")", code="ok")
@@ -781,14 +878,26 @@ CONSTANTES:
                 result = CheckResult("status:markdown", ERRO, "seção 'Status' ausente no Markdown", code="missing_markdown_status")
                 all_results.ADICIONAR(result)
             SENÃO SE markdown_status != toml_status:
-                result = CheckResult("status", ERRO, "status no TOML (" + toml_status + ") difere do Markdown (" + markdown_status + ")", code="status_mismatch")
+                result = CheckResult("status", ERRO, "status no TOML (" + toml_status + ") difere do Markdown (" + markdown_status + ")", code="toml_markdown_status_mismatch")
                 all_results.ADICIONAR(result)
             SENÃO:
                 result = CheckResult("status:markdown", OK, "status coincide (" + markdown_status + ")", code="ok")
                 all_results.ADICIONAR(result)
 
             # 8. Extrair e validar ACs (TOML + Markdown)
-            toml_acs = toml_data.OBTER("acceptance_criteria", LISTA VAZIA)
+            SE "acceptance_criteria" NÃO EXISTE EM toml_data:
+                all_results.ADICIONAR(CheckResult("acceptance_criteria", ERRO,
+                    "container acceptance_criteria ausente", code="missing_acceptance_criteria"))
+                CONTINUAR
+            toml_acs = toml_data.OBTER("acceptance_criteria")
+            SE toml_acs NÃO É LISTA:
+                all_results.ADICIONAR(CheckResult("acceptance_criteria", ERRO,
+                    "acceptance_criteria deve ser lista", code="invalid_field_type"))
+                CONTINUAR
+            SE toml_acs É LISTA VAZIA:
+                all_results.ADICIONAR(CheckResult("acceptance_criteria", ERRO,
+                    "acceptance_criteria deve conter ao menos um item", code="empty_acceptance_criteria"))
+                CONTINUAR
             markdown_acs = EXTRAIR_ACS(markdown_content, spec_id)
 
             results = VALIDAR_ACS_HYBRID(toml_acs, markdown_acs, spec_id)
@@ -809,18 +918,12 @@ CONSTANTES:
             # 10. Validar superseded_by se status = Substituído
             SE toml_status == "Substituído":
                 superseded_by = toml_data.OBTER("superseded_by")
-                SE superseded_by É NULO:
-                    # Fallback: tentar extrair do Markdown (cabeçalho ou Histórico)
-                    header = EXTRAIR_CABECALHO(markdown_content)
-                    history_section = EXTRAIR_SECAO(markdown_content, "Histórico de Alterações")
-                    superseded_by = EXTRAIR_SUBSTITUIDA_POR(header, history_section)
-
                 SE superseded_by É NULO OU VAZIA:
                     results.ADICIONAR(CheckResult("evidencia:substituida_por", ERRO,
-                                         "referência à especificação substituta ausente (campo 'superseded_by' no TOML ou 'Substituída por' no Markdown)",
+                                         "campo 'superseded_by' ausente no TOML para status Substituído",
                                          code="missing_superseded_by"))
                 SENÃO:
-                    SE superseded_by CORRESPONDE ^HERMES-\\d{4}-.+$:
+                    SE superseded_by CORRESPONDE ^HERMES-\\d{4}$:
                         results.ADICIONAR(CheckResult("evidencia:substituida_por", OK, "referência substituta presente: " + superseded_by, code="ok"))
                     SENÃO:
                         results.ADICIONAR(CheckResult("evidencia:substituida_por", ERRO,
@@ -924,35 +1027,23 @@ FUNÇÃO EXTRAIR_ACS(content, spec_id):
 
 FUNÇÃO VALIDAR_ACS(acs, spec_id):
     results = []
-    expected_num = 1
+    SE acs NÃO É VAZIO E acs[0].id != "AC-01":
+        results.ADICIONAR(CheckResult("ac:first", ERRO,
+            "o primeiro critério deve ser AC-01", code="invalid_ac_id"))
     PARA cada ac EM acs:
-        SE ac.num != expected_num:
-            # DECISÃO PENDENTE — gap em numeração: WARNING vs ERROR
-            # Código público: decisão pendente
-            REGISTRAR_RESULTADO_CONFORME_POLITICA_PENDENTE("AC fora de sequência")
         SE ac.desc VAZIA:
             results.ADICIONAR(CheckResult("ac:" + ac.id, ERRO, "descrição vazia", code="ac_empty"))
         SENÃO:
             results.ADICIONAR(CheckResult("ac:" + ac.id, OK, "formato válido", code="ok"))
-        expected_num += 1
+    # Não emitir resultado para gaps; política permanece adiada.
     RETORNAR results
 
 FUNÇÃO VALIDAR_VINCULO_TESTE(ac, spec_id, test_markers):
-    key = spec_id + "/" + ac.id
-    SE key EM test_markers:
-        RETORNAR CheckResult("teste:" + ac.id, OK, "vínculo em " + test_markers[key][0].arquivo, code="ok")
-    SENÃO:
-        # DECISÃO PENDENTE — forma da justificativa explícita, política por status,
-        # severidade e código público
-        # Apenas detecta vínculo ausente; política de severidade será definida em microbloco próprio
-        # Cada AC deve possuir teste ou justificativa permitida
-        status = EXTRAIR_STATUS(content_do_spec)
-        SE status == "Implementado":
-            # Código público: decisão pendente
-            REGISTRAR_RESULTADO_CONFORME_POLITICA_PENDENTE("AC sem teste — Implementado")
-        SENÃO:
-            # Código público: decisão pendente
-            REGISTRAR_RESULTADO_CONFORME_POLITICA_PENDENTE("AC sem teste — status ≠ Implementado")
+    # Aplicar o contrato determinístico de VALIDAR_VINCULO_TESTE_HYBRID:
+    # exclusividade, dependência de test_function e prevenção de cascata na ordem
+    # tipo → segurança → existência do arquivo → existência da função.
+    RETORNAR VALIDAR_VINCULO_TESTE_HYBRID(ac.id, spec_id, ac.test_file,
+        ac.test_function, ac.justification, test_markers, ac.status)
 
 FUNÇÃO VALIDAR_EVIDENCIAS_IMPLEMENTADO(content, spec_id):
     results = []
@@ -1023,19 +1114,17 @@ FUNÇÃO VALIDAR_FORMATO_EVIDENCIA(field, value):
             RETORNAR CheckResult("evidencia:" + field, AVISO, "formato esperado: 'comando → resultado'", code="evidence_format_unrecognized")
     RETORNAR CheckResult("", OK, "", code="ok")
 
-FUNÇÃO VALIDAR_EVIDENCIAS_SUBSTITUIDO(content, spec_id):
+FUNÇÃO VALIDAR_EVIDENCIAS_SUBSTITUIDO(toml_data, content, spec_id):
     results = []
-    # Verifica referência substituta no cabeçalho ou Histórico de Alterações
-    header = EXTRAIR_CABECALHO(content)
-    history_section = EXTRAIR_SECAO(content, "Histórico de Alterações")
-    substituida_por = EXTRAIR_SUBSTITUIDA_POR(header, history_section)
+    # TOML é a fonte estrutural canônica; Markdown é apenas espelho humano.
+    substituida_por = toml_data.OBTER("superseded_by")
     SE substituida_por É NULO OU VAZIA:
         results.ADICIONAR(CheckResult("evidencia:substituida_por", ERRO,
-                                     "referência à especificação substituta ausente (campo 'Substituída por' no cabeçalho ou Histórico de Alterações)",
+                                     "campo 'superseded_by' ausente no TOML para status Substituído",
                                      code="missing_superseded_by"))
     SENÃO:
         # Validar formato da referência (determinístico, somente leitura)
-        SE substituida_por CORRESPONDE ^HERMES-\d{4}-.+$:
+        SE substituida_por CORRESPONDE ^HERMES-\d{4}$:
             results.ADICIONAR(CheckResult("evidencia:substituida_por", OK, "referência substituta presente: " + substituida_por, code="ok"))
         SENÃO:
             results.ADICIONAR(CheckResult("evidencia:substituida_por", ERRO,
@@ -1044,11 +1133,11 @@ FUNÇÃO VALIDAR_EVIDENCIAS_SUBSTITUIDO(content, spec_id):
     RETORNAR results
 
 FUNÇÃO EXTRAIR_SUBSTITUIDA_POR(header, history_section):
-    # Procura no cabeçalho: "> **Substituída por:** `HERMES-XXXX-...`"
-    match = REGEX_SEARCH(Substituída por.*?`(HERMES-\d{4}-[^`]+)`, header)
+    # Extração futura do espelho humano para validação cruzada.
+    match = REGEX_SEARCH(Substituída por.*?`(HERMES-\d{4})`, header)
     SE match: RETORNAR match.grupo(1)
     # Procura no Histórico de Alterações
-    match = REGEX_SEARCH(Substituída por.*?(HERMES-\d{4}-[^\s\n]+), history_section)
+    match = REGEX_SEARCH(Substituída por.*?(HERMES-\d{4}), history_section)
     SE match: RETORNAR match.grupo(1)
     RETORNAR NULO
 
@@ -1121,16 +1210,28 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 | Cabeçalho principal ausente ou sem HERMES-NNNN | ERROR | `missing_header_id` | 1 | **Pula arquivo** |
 | ID no cabeçalho ≠ ID no nome do arquivo | ERROR | `header_filename_mismatch` | 1 | **Pula arquivo** |
 | Seção obrigatória ausente (19 TEMPLATE + Status + Resumo) | ERROR | `missing_section` | 1 | Sim (por seção) |
-| Status não está nos 5 permitidos | ERROR | `invalid_status` | 1 | Sim |
+| Campo `id` ausente no TOML | ERROR | `missing_toml_id` | 1 | **Pula documento quando identidade for indispensável** |
+| String `id` com formato inválido | ERROR | `invalid_toml_id` | 1 | **Pula documento** |
+|| Campo `status` ausente no TOML | ERROR | `missing_toml_status` | 1 | Sim; pula regras condicionais ao status ||
+|| Status não está nos 5 permitidos | ERROR | `invalid_status` | 1 | Sim ||
+|| `acceptance_criteria` ausente | ERROR | `missing_acceptance_criteria` | 1 | **Pula validações de AC** ||
+|| `acceptance_criteria` vazio | ERROR | `empty_acceptance_criteria` | 1 | **Pula validações de AC** ||
+|| `acceptance_criteria[i].id` ausente | ERROR | `missing_ac_id` | 1 | Sim (demais itens) ||
+|| `acceptance_criteria[i].id` com formato inválido | ERROR | `invalid_ac_id` | 1 | Sim (demais itens) ||
 | AC duplicado | ERROR | `ac_duplicate` | 1 | Sim |
 | AC fora de sequência (gap) | **DECISÃO PENDENTE** | **decisão pendente** | **decisão pendente** | Sim |
 | AC com descrição vazia | ERROR | `ac_empty` | 1 | Sim |
 | AC sem test_file nem justification (Implementado) | ERROR | `missing_test_or_justification` | 1 | Sim |
-| Status = Implementado sem evidências mínimas | ERROR | `missing_evidence_field` | 1 | Sim |
+| Status = Implementado sem container `evidence` | ERROR | `missing_evidence_toml` | 1 | Sim |
+| Campo interno obrigatório de `evidence` ausente | ERROR | `missing_evidence_field` | 1 | Sim |
 | Status = Substituído sem referência substituta | ERROR | `missing_superseded_by` | 1 | Sim |
 | Referência substituta com formato inválido | ERROR | `invalid_superseded_by_format` | 1 | Sim |
 | Arquivo de teste referenciado inexistente | ERROR | `test_file_missing` | 1 | Sim |
 | Função de teste referenciada inexistente | ERROR | `test_function_missing` | 1 | Sim |
+| `test_file` e `justification` juntos | ERROR | `test_justification_both` | 1 | Sim |
+| `test_function` sem `test_file` | ERROR | `test_function_without_file` | 1 | Sim |
+| Arquivo incompatível com o critério | ERROR | `test_file_mismatch` | 1 | Sim |
+| `justification` inválida | ERROR | `invalid_justification` | 1 | Sim |
 | Referência de teste tenta escapar da raiz do projeto | BLOCKED | `unsafe_path` | 3 | **Para inspeção** |
 | Caminho absoluto ou `..` em campo formal (arquivo spec, teste, specs_dir) | BLOCKED | `unsafe_path` | 3 | **Para inspeção** |
 | Indireção insegura (symlink, junction, reparse point) em caminho formal | **DECISÃO PENDENTE** | **decisão pendente** | **decisão pendente** | **Para inspeção** |
@@ -1143,10 +1244,10 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 || **Schema TOML: chave desconhecida em acceptance_criteria** | ERROR | `unknown_field_ac` | 1 | **Pula arquivo** ||
 || **Schema TOML: chave desconhecida em evidence** | ERROR | `unknown_field_evidence` | 1 | **Pula arquivo** ||
 || **Schema TOML: tipo inválido em campo estrutural (id, status, superseded_by, ACs, evidence)** | ERROR | `invalid_field_type` | 1 | **Pula arquivo/continua** ||
-|| **Schema TOML: acceptance_criteria não é lista** | ERROR | `invalid_acceptance_criteria_type` | 1 | **Pula arquivo** ||
+|| **Schema TOML: acceptance_criteria não é lista** | ERROR | `invalid_field_type` | 1 | **Pula arquivo** ||
 || **Schema TOML: item de acceptance_criteria não é tabela** | ERROR | `invalid_acceptance_criterion_type` | 1 | **Continua (demais itens)** ||
-|| **Schema TOML: evidence não é tabela** | ERROR | `invalid_evidence_type` | 1 | **Pula arquivo** ||
-|| **Divergência: identificador TOML vs Markdown** | ERROR | `toml_markdown_id_mismatch` | 1 | **Pula arquivo** ||
+|| **Schema TOML: evidence não é tabela** | ERROR | `invalid_field_type` | 1 | **Pula arquivo** ||
+||| **Divergência: identificador TOML vs Markdown** | ERROR | `toml_filename_mismatch` | 1 | **Pula arquivo** ||
 | **Divergência: AC no TOML ausente no Markdown** | ERROR | `ac_missing_in_markdown` | 1 | Sim |
 | **Divergência: AC no Markdown ausente no TOML** | ERROR | `ac_missing_in_toml` | 1 | Sim |
 | **Divergência: AC duplicado** | ERROR | `ac_duplicate` | 1 | Sim |
@@ -1154,7 +1255,7 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 | **Divergência: ordem dos ACs diferente** | ERROR | `ac_order_mismatch` | 1 | Sim |
 | **Divergência: ID/status capitalização não canônica** | ERROR | `non_canonical_capitalization` | 1 | Sim |
 | **Divergência: descrição humana AC vazia** | ERROR | `ac_empty_description` | 1 | Sim |
-| **Divergência: cabeçalho Markdown ausente** | ERROR | `missing_header` | 1 | **Pula arquivo** |
+|| **Divergência: cabeçalho Markdown ausente** | ERROR | `missing_header_id` | 1 | **Pula arquivo** ||
 
 ## Critérios de Aceitação
 
@@ -1184,7 +1285,7 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 - **AC-18**: Sem traceback em nenhum cenário: exceções capturadas no `main()` → `external_failure` (exit_code=4).
 - **AC-19**: Comando é somente leitura: nenhum arquivo modificado, criado ou apagado.
 - **AC-20**: Reutiliza infraestrutura existente: `Report`, `CheckResult`, `Status`, `PublicSanitizer`, `build_parser`.
-- **AC-21**: O schema TOML v1 valida tipos estruturais com os códigos públicos `invalid_field_type`, `invalid_acceptance_criteria_type`, `invalid_acceptance_criterion_type` e `invalid_evidence_type`; falhas de container impedem validações internas dependentes, e qualquer entrada superior desconhecida é normalizada como `unknown_field_toplevel`, pois `unknown_table` não é distinguível de forma confiável com `tomllib` após o parse.
+- **AC-21**: O schema TOML v1 valida tipos estruturais com os códigos públicos `invalid_field_type` e `invalid_acceptance_criterion_type`; falhas de container impedem validações internas dependentes, e qualquer entrada superior desconhecida é normalizada como `unknown_field_toplevel`, pois `unknown_table` não é distinguível de forma confiável com `tomllib` após o parse.
 
 ## Plano de Testes
 
@@ -1198,7 +1299,7 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 | AC-06 | Unitário | tests/test_spec_check.py | test_validate_required_sections | 19 seções + Status + Resumo checadas; ausente → ERRO por seção |
 | AC-07 | Unitário | tests/test_spec_check.py | test_validate_status_values | 5 status válidos OK; inválido → ERRO |
 | AC-08 | Unitário | tests/test_spec_check.py | test_extract_acs | Extrai ACs no formato **AC-NN**: desc |
-| AC-09 | Unitário | tests/test_spec_check.py | test_validate_ac_sequential | Gap na numeração → **DECISÃO PENDENTE** (WARNING vs ERROR; status, código público e exit code: decisão pendente); descrição vazia → ERRO |
+| AC-09 | Unitário | tests/test_spec_check.py | test_validate_ac_identity | Primeiro item AC-01, IDs `AC-NN` únicos; gap como AC-01/AC-03 não gera resultado neste bloco; descrição vazia → ERRO |
 | AC-10 | Integração | tests/test_spec_check.py | test_validate_test_link_found | Marcador em teste → OK |
 | AC-11 | Integração | tests/test_spec_check.py | test_validate_test_link_missing | Sem marcador → valida política de justification por status (Rascunho=opcional; Aprovado=opcional enquanto sem impl; Em impl=opcional para AC não impl; Implementado=exige um caminho; Substituído=opcional) |
 | AC-12 | Unitário | tests/test_spec_check.py | test_validate_evidence_implemented | 11 campos padronizados checados; ausente/inválido/marcador rejeitado/formato inválido → **ERROR** |
@@ -1274,9 +1375,9 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 | Campo desconhecido em acceptance_criteria | ERROR documental (`unknown_field_ac`) |
 | Campo desconhecido em evidence | ERROR documental (`unknown_field_evidence`) |
 | Tipo inválido em campo estrutural (id, status, superseded_by, ACs, evidence) | ERROR documental (`invalid_field_type`) |
-| acceptance_criteria não é lista | ERROR documental (`invalid_acceptance_criteria_type`) |
+| acceptance_criteria não é lista | ERROR documental (`invalid_field_type`) |
 | Item de acceptance_criteria não é tabela | ERROR documental (`invalid_acceptance_criterion_type`) |
-| evidence não é tabela | ERROR documental (`invalid_evidence_type`) |
+| evidence não é tabela | ERROR documental (`invalid_field_type`) |
 | schema_version ausente | ERROR documental |
 | schema_version com tipo diferente de inteiro | ERROR documental |
 | schema_version zero | ERROR documental |
@@ -1287,6 +1388,19 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 | Confirmação: versão futura não é interpretada parcialmente | Não valida campos conhecidos da v1 em doc v2 |
 | [extra], [[extra]] e extra = {...} resultando em unknown_field_toplevel | unknown_table não é emitido; normalizado como unknown_field_toplevel |
 | schema_version inválido impedindo os novos erros | schema_version inválido interrompe validação da v1 |
+
+**Matriz de rastreabilidade — contrato semântico local do Bloco 3:**
+
+| Regra | Código(s) | Teste mínimo planejado |
+|-------|-----------|------------------------|
+| `id` obrigatório, string e `HERMES-NNNN` | `missing_toml_id`, `invalid_field_type`, `invalid_toml_id`, `non_canonical_capitalization` | ausência, número, HERMES-02, HERMES-ABCD, hermes-0002, válido |
+| `status` obrigatório e canônico | `missing_toml_status`, `invalid_field_type`, `invalid_status`, `non_canonical_capitalization` | ausência, tipo incorreto, valor desconhecido, variação de caixa, cinco válidos |
+| Container de AC obrigatório e não vazio | `missing_acceptance_criteria`, `invalid_field_type`, `empty_acceptance_criteria` | ausência, não lista, lista vazia, lista com item |
+| Identidade de AC | `missing_ac_id`, `invalid_field_type`, `invalid_ac_id`, `non_canonical_capitalization`, `ac_duplicate` | ausência, tipo, AC-1, AC-001, AC-AA, ac-01, duplicado, primeiro diferente de AC-01 |
+| Gap adiado | nenhum neste bloco | AC-01/AC-03 não emite WARNING nem ERROR |
+| Sucessão | `missing_superseded_by`, `invalid_field_type`, `invalid_superseded_by_format` | obrigatório só em Substituído; ID curto válido; nome completo inválido |
+| Evidência condicionada | `missing_evidence_toml`, `missing_evidence_field`, `invalid_field_type` | Implementado sem container, campo interno ausente, tipo incorreto; Substituído preserva histórico |
+| Vínculos de AC | `test_justification_both`, `test_function_without_file`, `test_file_missing`, `test_function_missing`, `test_file_mismatch`, `invalid_justification`, `missing_test_or_justification`, `unsafe_path` | matriz por status e prevenção de cascata segurança → arquivo → função |
 
 ## Arquivos Provavelmente Afetados
 |
@@ -1316,6 +1430,10 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 | 2026-07-30 | Comando somente leitura, sem side effects | Segurança; alinhado com `doctor`/`worktree`/`preflight` | Permitir --fix para correções automáticas |
 | 2026-07-30 | Especificações com status Implementado exigem evidências mínimas (11 campos padronizados, 6 sempre-obrigatórios) | Garante rastreabilidade e qualidade | Não exigir evidências |
 | 2026-07-31 | Formato híbrido: front matter TOML + Markdown | TOML para dados validáveis machine-readable; Markdown para leitura humana; `tomllib` da stdlib Python 3.11+; delimitadores `+++`; sem dependências extras | Markdown puro com parsing complexo; front matter YAML (PyYAML); formato totalmente estruturado (JSON/TOML sem Markdown) |
+| 2026-08-04 | Contrato semântico local: `id`, `status` e ACs obrigatórios; ACs não vazios; códigos de ausência, tipo, formato e capitalização separados | Evita reutilizar erro de tipo para ausência ou vazio e impede cascatas | Tratar toda falha como `invalid_field_type` |
+| 2026-08-04 | Gap de AC não é validado no Bloco 3; apenas o primeiro item deve ser AC-01 | Preserva a decisão pendente sem confundir gap com divergência de ordem | Reutilizar `ac_order_mismatch` |
+| 2026-08-04 | `superseded_by` canônico é o ID curto `HERMES-NNNN` no TOML | O ID permanece estável se título ou nome do arquivo mudar | Persistir nome completo do arquivo |
+| 2026-08-04 | `invalid_status` é o único código público para string de status fora do conjunto | Uniformiza tabela, pseudocódigo, ACs e testes | Manter dois códigos públicos para a mesma falha |
 
 ## Decisões Pendentes Antes da Implementação
 |||
@@ -1328,6 +1446,8 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 | Função concreta de core/paths.py | Função existente a reutilizar (direct_project_path, resolve_directory, etc.); composição; necessidade de nova função |
 | Classificação de raiz inválida (--project) | Depende da política pública existente de CLI e caminhos; exit code; comportamento |
 | Formato estruturado adicional para evidência manual | Estrutura padronizada além de texto livre para justification/validação manual |
+| Heurística determinística de `justification` | Especificar antes do Bloco 3C como comprovar razão, método e referência sem IA, subjetividade ou critério de mero comprimento |
+| Códigos cruzados de identidade | Uniformizar `toml_filename_mismatch` versus `toml_markdown_id_mismatch`; ficam fora dos Blocos 3A e 3B |
 
 **Nota**: Estas decisões NÃO estão autorizadas neste microbloco. Serão resolvidas em microblocos próprios ou na decisão arquitetural.
 
@@ -1348,6 +1468,8 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 - **Evidências em formato tabela vs lista**: Validação procura campo na seção; tabela markdown com `| Campo | Valor |` funciona; lista `- Campo: valor` também. Regex tolera ambos.
 - **Performance em projetos com muitas specs/testes**: Leitura de todos os arquivos de teste a cada execução. Aceitável para CLI pontual; pode cachear no futuro.
 - **Encoding de arquivos**: Usa UTF-8; arquivos em outro encoding podem falhar. Mitigação: `errors="replace"` na leitura.
+- **Heurística de justification ainda não fechada**: os três elementos são obrigatórios, mas a política determinística mínima precisa ser especificada antes do Bloco 3C; não usar IA, interpretação subjetiva ou comprimento isolado.
+- **Códigos de mismatch de identidade ainda não uniformizados**: `toml_filename_mismatch` e `toml_markdown_id_mismatch` permanecem reservados ao bloco futuro de validações cruzadas.
 
 ## Evidências da Implementação
 |
@@ -1372,3 +1494,4 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 | 2026-07-30 | Danilo Fukuda | Criação da especificação HERMES-0002 | — |
 | 2026-08-04 | Danilo Fukuda | Aprovação formal da especificação HERMES-0002 | Auditoria final concluída (0 bloqueadores) |
 | 2026-08-04 | Danilo Fukuda | Status alterado para Em implementação | Commits 754dd1c (parser híbrido) e 8964e01 (schema TOML v1) |
+| 2026-08-04 | Danilo Fukuda | Contrato semântico do Bloco 3 consolidado documentalmente | Ajuste controlado de códigos, ACs, sucessão, evidências e vínculos |
