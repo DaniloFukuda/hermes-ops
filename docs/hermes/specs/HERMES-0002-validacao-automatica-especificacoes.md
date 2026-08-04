@@ -1,7 +1,7 @@
 +++
 schema_version = 1
 id = "HERMES-0002"
-status = "Aprovado"
+status = "Em implementação"
 [[acceptance_criteria]]
 id = "AC-01"
 [[acceptance_criteria]]
@@ -24,7 +24,6 @@ id = "AC-09"
 id = "AC-10"
 [[acceptance_criteria]]
 id = "AC-11"
-justification = "Aprovação formal — a especificação passou por auditoria estrutural e semântica completa, com pseudocódigo abrangente, 20 critérios de aceitação testáveis e independentes, e plano de testes detalhado com rastreabilidade AC↔teste. Validação manual de conformidade com TEMPLATE e AGENTS.md registrada no Histórico de Alterações."
 [[acceptance_criteria]]
 id = "AC-12"
 [[acceptance_criteria]]
@@ -43,12 +42,16 @@ id = "AC-18"
 id = "AC-19"
 [[acceptance_criteria]]
 id = "AC-20"
+[[acceptance_criteria]]
+id = "AC-21"
 +++
 
 # HERMES-0002 — Validação Automática de Especificações (spec-check)
 
 ## Status
 Rascunho | Aprovado | Em implementação | Implementado | Substituído
+
+**Status atual: Em implementação**
 
 ## Resumo para o Responsável pelo Projeto
 
@@ -158,39 +161,35 @@ Novo comando `spec-check` com:
 
 O campo `justification` nos ACs do front matter TOML segue política rigorosa por status:
 
-- **Rascunho**: `test_file` opcional; `justification` opcional; pode não possuir nenhum dos dois; não usar `justification` para indicar trabalho futuro; quando ainda não existe teste nem motivo de não aplicabilidade, omitir ambos.
-- **Aprovado**: cada AC deve possuir exatamente um caminho — `test_file` ou `justification` válida.
-- **Em implementação**: cada AC deve possuir exatamente um caminho — `test_file` ou `justification` válida.
-- **Implementado**: cada AC deve possuir exatamente um caminho; `justification` só é permitida quando (1) teste automatizado é objetivamente não aplicável ou (2) o critério não é automatizável; `justification` deve conter: (a) razão objetiva, (b) método de validação manual ou documental, (c) referência verificável da evidência.
-- **Substituído**: não exige criação de novos vínculos; vínculos históricos existentes são preservados; não exige `justification` somente por estar Substituído.
+- **Rascunho**:
+  - zero ou um entre `test_file` e `justification`;
+  - ambos ausentes são permitidos;
+  - ambos presentes são inválidos.
 
-Regras transversais:
-- `test_file` e `justification` são mutuamente exclusivos.
-- `test_function` só pode existir junto de `test_file`.
-- O mesmo `test_file` pode cobrir vários ACs.
-- A mesma `test_function` pode cobrir vários ACs quando isso estiver documentado.
-- Quando existe teste apontável, ele deve ser referenciado diretamente.
-- "Outro AC já cobre" não substitui `test_file`.
-- Ausência de CI não é `justification` de AC.
+- **Aprovado**:
+  - zero ou um entre `test_file` e `justification`;
+  - ambos ausentes são permitidos enquanto não existe implementação;
+  - ambos presentes são inválidos.
 
-Marcadores inválidos de `justification` (rejeitados com ERROR):
-- vazio; "pendente"; "a fazer"; "depois"; "futuro"; "TBD"; "em andamento"; "não executado"; "N/A"; "não aplicável" sem explicação; "desconhecido"; traço isolado ("—").
+- **Em implementação**:
+  - zero ou um entre `test_file` e `justification`;
+  - ambos ausentes são permitidos para AC ainda não implementado;
+  - ambos presentes são inválidos;
+  - vínculos devem ser adicionados conforme os ACs forem implementados.
 
-Exemplo válido para **Implementado**:
-```toml
-justification = "Validação manual — o critério exige inspeção visual do alinhamento no terminal. Procedimento e resultado registrados em docs/evidencias/alinhamento-terminal.md."
-```
+- **Implementado**:
+  - exatamente um entre `test_file` e `justification` válida;
+  - nenhum vínculo é inválido;
+  - ambos presentes são inválidos;
+  - `justification` exige razão objetiva, método de validação e referência verificável.
 
-Exemplo válido para **Rascunho** sem decisão de teste:
-```toml
-[[acceptance_criteria]]
-id = "AC-03"
-```
+- **Substituído**:
+  - não exige vínculo novo;
+  - vínculos históricos existentes são preservados.
 
-Não usar como exemplo válido:
-```toml
-justification = "Teste será definido depois."
-```
+Regra universal:
+
+- `test_function` sem `test_file` é inválido.
 
 **Divergências TOML versus Markdown (ERROR documental, exit code isolado 1):**
 
@@ -221,12 +220,12 @@ O schema versão 1 é **fechado**. São **erros documentais** (ERROR documental,
 - Chave desconhecida no nível superior.
 - Chave desconhecida em `acceptance_criteria`.
 - Chave desconhecida em `evidence`.
-- Tabela desconhecida.
 - `schema_version` ausente.
 - `schema_version` com tipo diferente de inteiro.
 - `schema_version` zero ou negativo.
 - `schema_version` maior que 1.
 - Chave TOML duplicada.
+- Tipo incorreto em campos estruturais (ver códigos públicos abaixo).
 
 Para `schema_version` maior que 1:
 - Considerar versão não suportada.
@@ -242,6 +241,92 @@ A evolução acontece por:
 1. Definição explícita de nova `schema_version`.
 2. Implementação do suporte correspondente.
 3. Migração documentada.
+
+**Tipos estruturais do schema v1 (contrato mínimo para Bloco 2B):**
+
+Os seguintes tipos são definidos para o schema versão 1:
+
+- `id`: string
+- `status`: string
+- `superseded_by`: string quando presente
+- `acceptance_criteria`: array/lista
+- Cada `acceptance_criteria[i]`: tabela/mapping
+- `id`, `test_file`, `test_function` e `justification` em AC: string quando presentes
+- `evidence`: tabela/mapping quando presente
+- Cada valor permitido de `evidence`: string
+
+**Códigos públicos para validação de tipos estruturais (Bloco 2B):**
+
+A. **invalid_field_type**
+
+Usado para tipo incorreto em:
+- `id`
+- `status`
+- `superseded_by`
+- `acceptance_criteria[i].id`
+- `acceptance_criteria[i].test_file`
+- `acceptance_criteria[i].test_function`
+- `acceptance_criteria[i].justification`
+- valores de `evidence`
+
+O campo/localização no `SchemaIssue` identifica exatamente o item inválido.
+
+B. **invalid_acceptance_criteria_type**
+
+Usado quando `acceptance_criteria` não é lista/array.
+
+C. **invalid_acceptance_criterion_type**
+
+Usado quando `acceptance_criteria[i]` não é tabela/mapping.
+
+D. **invalid_evidence_type**
+
+Usado quando `evidence` não é tabela/mapping.
+
+Não criar códigos diferentes por campo individual.
+
+**Precedência e ausência de erros secundários:**
+
+- `schema_version` inválido continua interrompendo as regras da versão 1.
+- `acceptance_criteria` com tipo inválido:
+  - emitir `invalid_acceptance_criteria_type`;
+  - não validar itens ou campos internos.
+- Item de AC com tipo inválido:
+  - emitir `invalid_acceptance_criterion_type`;
+  - continuar para os demais itens;
+  - não emitir erros internos para aquele item.
+- `evidence` com tipo inválido:
+  - emitir `invalid_evidence_type`;
+  - não validar campos ou valores internos.
+- Campo com tipo inválido:
+  - emitir `invalid_field_type`;
+  - validações semânticas dependentes daquele valor não devem gerar cascata.
+
+**Decisão sobre `unknown_table` para schema v1:**
+
+Para `schema_version = 1`:
+
+- `tomllib` não preserva distinção entre:
+  - tabela TOML `[extra]`;
+  - inline table `extra = { ... }`;
+  após o parse, pois ambas se tornam mapping.
+- Arrays de tabelas tornam-se `list[mapping]`, mas não será criada uma classificação parcial que trate apenas essa forma.
+- Qualquer chave superior desconhecida, independentemente de ter vindo de:
+  - valor escalar;
+  - tabela;
+  - inline table;
+  - array de tabelas;
+  será reportada como `unknown_field_toplevel`.
+- `unknown_table` **não será emitido** no schema v1.
+- Não será usado:
+  - scanner parcial do TOML bruto;
+  - parser customizado;
+  - dependência TOML externa;
+  - AST externo.
+
+A alternativa de emitir `unknown_table` foi considerada e descartada por não ser distinguível de forma confiável com `tomllib` após o parse. Esta decisão está registrada em **Decisões Tomadas / Alternativas Descartadas** abaixo.
+
+Remover ou substituir qualquer trecho que prometa `unknown_table` como código executável no schema v1.
 
 **Formato texto:**
 ```
@@ -564,11 +649,11 @@ CONSTANTES:
                 "justification aceita: " + justification, code="ok")
 
         # Nenhum dos dois
-        SE toml_status EM {"Aprovado", "Em implementação", "Implementado"}:
+        SE toml_status == "Implementado":
             RETORNAR CheckResult("teste:" + ac_id, ERRO,
-                "AC deve ter test_file ou justification válida no status " + toml_status,
+                "AC deve ter test_file ou justification válida no status Implementado",
                 code="missing_test_or_justification")
-        # Rascunho e Substituído: permitido não ter nenhum
+        # Rascunho, Aprovado, Em implementação, Substituído: permitido não ter nenhum
         RETORNAR CheckResult("teste:" + ac_id, OK,
             "sem test_file nem justification (permitido no status " + toml_status + ")", code="ok")
 
@@ -1040,7 +1125,7 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 | AC duplicado | ERROR | `ac_duplicate` | 1 | Sim |
 | AC fora de sequência (gap) | **DECISÃO PENDENTE** | **decisão pendente** | **decisão pendente** | Sim |
 | AC com descrição vazia | ERROR | `ac_empty` | 1 | Sim |
-| AC sem test_file nem justification (Aprovado, Em implementação, Implementado) | ERROR | `missing_test_or_justification` | 1 | Sim |
+| AC sem test_file nem justification (Implementado) | ERROR | `missing_test_or_justification` | 1 | Sim |
 | Status = Implementado sem evidências mínimas | ERROR | `missing_evidence_field` | 1 | Sim |
 | Status = Substituído sem referência substituta | ERROR | `missing_superseded_by` | 1 | Sim |
 | Referência substituta com formato inválido | ERROR | `invalid_superseded_by_format` | 1 | Sim |
@@ -1053,14 +1138,15 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 | Exceção interna inesperada / defeito do spec-check | — | `external_failure` | 4 | **Para execução** |
 | **Schema TOML: `schema_version` ausente** | ERROR | `missing_schema_version` | 1 | **Pula arquivo** |
 | **Schema TOML: `schema_version` tipo não inteiro** | ERROR | `invalid_schema_version_type` | 1 | **Pula arquivo** |
-| **Schema TOML: `schema_version` zero ou negativo** | ERROR | `invalid_schema_version_value` | 1 | **Pula arquivo** |
-| **Schema TOML: `schema_version` > 1** | ERROR | `unsupported_schema_version` | 1 | **Pula arquivo** |
-| **Schema TOML: chave desconhecida nível superior** | ERROR | `unknown_field_toplevel` | 1 | **Pula arquivo** |
-| **Schema TOML: chave desconhecida em acceptance_criteria** | ERROR | `unknown_field_ac` | 1 | **Pula arquivo** |
-| **Schema TOML: chave desconhecida em evidence** | ERROR | `unknown_field_evidence` | 1 | **Pula arquivo** |
-| **Schema TOML: tabela desconhecida** | ERROR | `unknown_table` | 1 | **Pula arquivo** |
-| **Divergência: identificador TOML vs Markdown** | ERROR | `toml_markdown_id_mismatch` | 1 | **Pula arquivo** |
-| **Divergência: status TOML vs Markdown** | ERROR | `toml_markdown_status_mismatch` | 1 | **Pula arquivo** |
+|| **Schema TOML: `schema_version` > 1** | ERROR | `unsupported_schema_version` | 1 | **Pula arquivo** ||
+|| **Schema TOML: chave desconhecida nível superior** | ERROR | `unknown_field_toplevel` | 1 | **Pula arquivo** ||
+|| **Schema TOML: chave desconhecida em acceptance_criteria** | ERROR | `unknown_field_ac` | 1 | **Pula arquivo** ||
+|| **Schema TOML: chave desconhecida em evidence** | ERROR | `unknown_field_evidence` | 1 | **Pula arquivo** ||
+|| **Schema TOML: tipo inválido em campo estrutural (id, status, superseded_by, ACs, evidence)** | ERROR | `invalid_field_type` | 1 | **Pula arquivo/continua** ||
+|| **Schema TOML: acceptance_criteria não é lista** | ERROR | `invalid_acceptance_criteria_type` | 1 | **Pula arquivo** ||
+|| **Schema TOML: item de acceptance_criteria não é tabela** | ERROR | `invalid_acceptance_criterion_type` | 1 | **Continua (demais itens)** ||
+|| **Schema TOML: evidence não é tabela** | ERROR | `invalid_evidence_type` | 1 | **Pula arquivo** ||
+|| **Divergência: identificador TOML vs Markdown** | ERROR | `toml_markdown_id_mismatch` | 1 | **Pula arquivo** ||
 | **Divergência: AC no TOML ausente no Markdown** | ERROR | `ac_missing_in_markdown` | 1 | Sim |
 | **Divergência: AC no Markdown ausente no TOML** | ERROR | `ac_missing_in_toml` | 1 | Sim |
 | **Divergência: AC duplicado** | ERROR | `ac_duplicate` | 1 | Sim |
@@ -1082,7 +1168,7 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 - **AC-08**: Extrai ACs da seção "Critérios de Aceitação" no padrão `**AC-NN**: descrição`.
 - **AC-09**: Valida ACs: numeração sequencial a partir de 01 (gap → **DECISÃO PENDENTE** — WARNING vs ERROR; status, código público e exit code: decisão pendente), descrição não vazia (vazia → **ERROR**, exit_code=1). AC duplicado → **ERROR** (exit_code=1).
 - **AC-10**: Verifica vínculo AC → teste: busca marcador `Spec: HERMES-XXXX / AC-NN` em `tests/**/*.py`.
-- **AC-11**: AC sem `test_file` segue a política formal de **justification por status** definida no Comportamento Desejado (seção "Política de `justification` por status"). Em resumo: **Rascunho** — `test_file` e `justification` opcionais, ambos podem estar ausentes; **Aprovado, Em implementação, Implementado** — exatamente um entre `test_file` e `justification` válida; **Substituído** — não exige novo vínculo de implementação. A validação verifica mutual exclusivity, formato da justification (3 elementos para Implementado), e existência do marcador nos testes quando `test_file` presente.
+- **AC-11**: AC sem `test_file` segue a política formal de **justification por status** definida no Comportamento Desejado (seção "Política de `justification` por status"). Em resumo: **Rascunho** — zero ou um entre `test_file` e `justification`, ambos ausentes permitidos, ambos presentes inválidos; **Aprovado** — zero ou um entre `test_file` e `justification`, ambos ausentes permitidos enquanto não existe implementação, ambos presentes inválidos; **Em implementação** — zero ou um entre `test_file` e `justification`, ambos ausentes permitidos para AC ainda não implementado, vínculos devem ser adicionados conforme ACs implementados, ambos presentes inválidos; **Implementado** — exatamente um entre `test_file` e `justification` válida, nenhum vínculo inválido, ambos presentes inválidos, `justification` exige razão objetiva, método de validação e referência verificável; **Substituído** — não exige vínculo novo, vínculos históricos preservados. Regra universal: `test_function` sem `test_file` é inválido. A validação verifica mutual exclusivity, formato da justification (3 elementos para Implementado), e existência do marcador nos testes quando `test_file` presente.
 - **AC-12**: Se Status = Implementado, valida seção Evidências com os 11 campos padronizados. Cada campo deve ter valor concreto ou "Não aplicável — justificativa objetiva". Falha → **ERROR** (exit_code=1, continua). Valida: presença, não vazio, não marcador rejeitado, formato específico (commit hex 7-64, integração reconhecida, Python em plataformas, git diff --check "sem avisos" ou avisos, condicionais com "→" sem failed/error, skips justificados em Limitações). "Não aplicável" requer justificativa; "não executado" inválido; failed/errors não satisfazem Implementado.
 - **AC-13**: Se Status = Substituído, valida referência explícita à especificação substituta (campo "Substituída por" no cabeçalho ou Histórico de Alterações). Não exige evidências de implementação. Falha → **ERROR** (exit_code=1, continua). Validação determinística e somente leitura.
 - **AC-14**: Valida caminhos seguros: apenas valores formalmente definidos como caminhos (arquivo do teste, arquivo de especificação, diretório de especificações) passam por validação de contenção via `core/paths.py`; a função concreta será definida na decisão arquitetural. Campos como `commit`, `plataformas validadas`, `resultado de teste`, `comando` e texto descritivo **não** são caminhos. Referências de teste extraídas em campos estruturados: `arquivo_teste` (validado), `funcao`, `tipo`, `descricao`. URLs legítimas, texto explicativo e Markdown bruto **não** passam por validação de caminho. `PublicSanitizer` aplicado **somente na apresentação dos resultados** (saída texto/JSON) para evitar exposição de caminhos locais. Sanitização de saída não substitui validação de contenção. **Política de symlinks/junctions/reparse points: DECISÃO PENDENTE** para microbloco separado. O formato híbrido (front matter TOML + Markdown) é a base de validação; o Markdown ainda será inspecionado minimamente para cabeçalho principal, seções humanas obrigatórias, descrições dos ACs e validações cruzadas.
@@ -1098,6 +1184,7 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 - **AC-18**: Sem traceback em nenhum cenário: exceções capturadas no `main()` → `external_failure` (exit_code=4).
 - **AC-19**: Comando é somente leitura: nenhum arquivo modificado, criado ou apagado.
 - **AC-20**: Reutiliza infraestrutura existente: `Report`, `CheckResult`, `Status`, `PublicSanitizer`, `build_parser`.
+- **AC-21**: O schema TOML v1 valida tipos estruturais com os códigos públicos `invalid_field_type`, `invalid_acceptance_criteria_type`, `invalid_acceptance_criterion_type` e `invalid_evidence_type`; falhas de container impedem validações internas dependentes, e qualquer entrada superior desconhecida é normalizada como `unknown_field_toplevel`, pois `unknown_table` não é distinguível de forma confiável com `tomllib` após o parse.
 
 ## Plano de Testes
 
@@ -1113,7 +1200,7 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 | AC-08 | Unitário | tests/test_spec_check.py | test_extract_acs | Extrai ACs no formato **AC-NN**: desc |
 | AC-09 | Unitário | tests/test_spec_check.py | test_validate_ac_sequential | Gap na numeração → **DECISÃO PENDENTE** (WARNING vs ERROR; status, código público e exit code: decisão pendente); descrição vazia → ERRO |
 | AC-10 | Integração | tests/test_spec_check.py | test_validate_test_link_found | Marcador em teste → OK |
-| AC-11 | Integração | tests/test_spec_check.py | test_validate_test_link_missing | Sem marcador → valida política de justification por status (Rascunho=opcional; Aprovado/Em impl/Implementado=exige um caminho; Substituído=opcional) |
+| AC-11 | Integração | tests/test_spec_check.py | test_validate_test_link_missing | Sem marcador → valida política de justification por status (Rascunho=opcional; Aprovado=opcional enquanto sem impl; Em impl=opcional para AC não impl; Implementado=exige um caminho; Substituído=opcional) |
 | AC-12 | Unitário | tests/test_spec_check.py | test_validate_evidence_implemented | 11 campos padronizados checados; ausente/inválido/marcador rejeitado/formato inválido → **ERROR** |
 | AC-13 | Unitário | tests/test_spec_check.py | test_validate_evidence_superseded | Referência substituta presente/ausente/inválida → OK/**ERROR** |
 | AC-12 | Unitário | tests/test_spec_check.py | test_evidence_na_justification_required | "Não aplicável" sem justificativa → **ERROR** |
@@ -1136,20 +1223,25 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 
 **Testes planejados — Justification:**
 
-| Cenário | O que Comprova |
+|| Cenário | O que Comprova ||
 |---------|----------------|
 | Rascunho sem test_file e sem justification | Permitido (omissão de ambos) |
 | Rascunho com test_file | Permitido |
 | Rascunho com justification objetiva | Permitido |
 | Rascunho com justification de adiamento inválida | ERROR (marcador rejeitado) |
-| Aprovado com exatamente um caminho (test_file) | OK |
-| Aprovado com exatamente um caminho (justification) | OK |
-| Aprovado sem nenhum caminho | ERROR |
+| Aprovado sem nenhum caminho | Permitido enquanto não existe implementação |
+| Aprovado com test_file | OK |
+| Aprovado com justification | OK |
 | Aprovado com ambos (test_file e justification) | ERROR (mutuamente exclusivos) |
-| Em implementação — mesmos cenários de Aprovado | Mesma validação |
+| Em implementação sem nenhum caminho | Permitido para AC ainda não implementado |
+| Em implementação com test_file | OK |
+| Em implementação com justification | OK |
+| Em implementação com ambos (test_file e justification) | ERROR (mutuamente exclusivos) |
+| Vínculos adicionados conforme ACs implementados | Vínculos crescem durante implementação |
 | Implementado com test_file | OK |
 | Implementado com justification válida (3 elementos: razão, método, referência) | OK |
 | Implementado com justification incompleta | ERROR |
+| Implementado sem nenhum vínculo | ERROR |
 | Substituído preservando vínculo histórico | Não exige justification nova |
 | test_function sem test_file | ERROR |
 | Cada marcador rejeitado (vazio, pendente, a fazer, depois, futuro, TBD, em andamento, não executado, N/A, não aplicável sem explicação, desconhecido, traço isolado) | ERROR |
@@ -1176,12 +1268,15 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 
 **Testes planejados — Schema TOML versão 1 (fechado):**
 
-| Caso | O que Comprova |
+|| Caso | O que Comprova ||
 |------|----------------|
-| Campo desconhecido no nível superior | ERROR documental |
-| Campo desconhecido em acceptance_criteria | ERROR documental |
-| Campo desconhecido em evidence | ERROR documental |
-| Tabela desconhecida | ERROR documental |
+| Campo desconhecido no nível superior | ERROR documental (`unknown_field_toplevel`) |
+| Campo desconhecido em acceptance_criteria | ERROR documental (`unknown_field_ac`) |
+| Campo desconhecido em evidence | ERROR documental (`unknown_field_evidence`) |
+| Tipo inválido em campo estrutural (id, status, superseded_by, ACs, evidence) | ERROR documental (`invalid_field_type`) |
+| acceptance_criteria não é lista | ERROR documental (`invalid_acceptance_criteria_type`) |
+| Item de acceptance_criteria não é tabela | ERROR documental (`invalid_acceptance_criterion_type`) |
+| evidence não é tabela | ERROR documental (`invalid_evidence_type`) |
 | schema_version ausente | ERROR documental |
 | schema_version com tipo diferente de inteiro | ERROR documental |
 | schema_version zero | ERROR documental |
@@ -1190,6 +1285,8 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 | schema_version maior que 1 (ex.: 2) | ERROR documental, versão não suportada, pula documento, continua demais |
 | TOML com chave duplicada | ERROR geral de parsing (invalid_hybrid_format) |
 | Confirmação: versão futura não é interpretada parcialmente | Não valida campos conhecidos da v1 em doc v2 |
+| [extra], [[extra]] e extra = {...} resultando em unknown_field_toplevel | unknown_table não é emitido; normalizado como unknown_field_toplevel |
+| schema_version inválido impedindo os novos erros | schema_version inválido interrompe validação da v1 |
 
 ## Arquivos Provavelmente Afetados
 |
@@ -1242,6 +1339,7 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 4. **Auto-corrigir (--fix)**: Viola "somente leitura"; risco de corrupção; usuário corrige manualmente.
 5. **Validar arquivos fora de `docs/hermes/specs/`**: Escopo deliberadamente restrito.
 6. **Novo módulo de resultados**: Reutiliza `Report`/`CheckResult`/`Status` existentes; evita duplicação.
+7. **Emitir `unknown_table` como código de erro no schema v1**: `tomllib` não distingue tabela TOML de inline table após o parse; qualquer chave superior desconhecida é normalizada como `unknown_field_toplevel`. Alternativa descartada em favor da simplificação e confiabilidade.
 
 ## Riscos Restantes
 
@@ -1273,3 +1371,4 @@ FUNÇÃO VALIDAR_CAMINHOS_FORMAIS(project_path, spec_files, test_markers):
 |------|-------|-----------|------------|
 | 2026-07-30 | Danilo Fukuda | Criação da especificação HERMES-0002 | — |
 | 2026-08-04 | Danilo Fukuda | Aprovação formal da especificação HERMES-0002 | Auditoria final concluída (0 bloqueadores) |
+| 2026-08-04 | Danilo Fukuda | Status alterado para Em implementação | Commits 754dd1c (parser híbrido) e 8964e01 (schema TOML v1) |
