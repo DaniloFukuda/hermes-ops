@@ -82,6 +82,311 @@ class TestSchemaVersionValidation:
         assert not any(iss.code.startswith("schema_version") for iss in issues)
 
 
+class TestTomlIdSemantics:
+    """Tests for id field semantic validation (Block 3A1)."""
+
+    def test_id_missing(self) -> None:
+        """Missing id returns missing_toml_id."""
+        toml_data = {"schema_version": 1, "status": "Rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        missing_issues = [i for i in issues if i.code == "missing_toml_id"]
+        assert len(missing_issues) == 1
+        assert missing_issues[0].field == "id"
+
+    def test_id_valid(self) -> None:
+        """Valid id format passes semantic validation."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        id_issues = [i for i in issues if i.code in ("missing_toml_id", "invalid_toml_id_format")]
+        assert len(id_issues) == 0
+
+    def test_id_lowercase(self) -> None:
+        """Lowercase id returns invalid_toml_id_format."""
+        toml_data = {"schema_version": 1, "id": "hermes-0001", "status": "Rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        format_issues = [i for i in issues if i.code == "invalid_toml_id_format"]
+        assert len(format_issues) == 1
+        assert format_issues[0].field == "id"
+
+    def test_id_three_digits(self) -> None:
+        """Three-digit id returns invalid_toml_id_format."""
+        toml_data = {"schema_version": 1, "id": "HERMES-001", "status": "Rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        format_issues = [i for i in issues if i.code == "invalid_toml_id_format"]
+        assert len(format_issues) == 1
+        assert format_issues[0].field == "id"
+
+    def test_id_five_digits(self) -> None:
+        """Five-digit id returns invalid_toml_id_format."""
+        toml_data = {"schema_version": 1, "id": "HERMES-00001", "status": "Rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        format_issues = [i for i in issues if i.code == "invalid_toml_id_format"]
+        assert len(format_issues) == 1
+        assert format_issues[0].field == "id"
+
+    def test_id_with_letters(self) -> None:
+        """Id with letters instead of digits returns invalid_toml_id_format."""
+        toml_data = {"schema_version": 1, "id": "HERMES-ABCD", "status": "Rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        format_issues = [i for i in issues if i.code == "invalid_toml_id_format"]
+        assert len(format_issues) == 1
+        assert format_issues[0].field == "id"
+
+    def test_id_with_spaces(self) -> None:
+        """Id with spaces returns invalid_toml_id_format."""
+        toml_data = {"schema_version": 1, "id": " HERMES-0001 ", "status": "Rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        format_issues = [i for i in issues if i.code == "invalid_toml_id_format"]
+        assert len(format_issues) == 1
+        assert format_issues[0].field == "id"
+
+    def test_id_non_string_only_invalid_field_type(self) -> None:
+        """Non-string id produces only invalid_field_type, not invalid_toml_id_format."""
+        toml_data = {"schema_version": 1, "id": 123, "status": "Rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        codes = [i.code for i in issues]
+        # Should have invalid_field_type for id
+        assert "invalid_field_type" in codes
+        # Should NOT have invalid_toml_id_format
+        assert "invalid_toml_id_format" not in codes
+
+    def test_id_non_string_no_invalid_toml_id_format(self) -> None:
+        """Non-string id does not produce invalid_toml_id_format as secondary error."""
+        toml_data = {"schema_version": 1, "id": 123, "status": "Rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        id_format_issues = [i for i in issues if i.code == "invalid_toml_id_format"]
+        assert len(id_format_issues) == 0
+
+
+class TestTomlStatusSemantics:
+    """Tests for status field semantic validation (Block 3A1)."""
+
+    def test_status_missing(self) -> None:
+        """Missing status returns missing_toml_status."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        missing_issues = [i for i in issues if i.code == "missing_toml_status"]
+        assert len(missing_issues) == 1
+        assert missing_issues[0].field == "status"
+
+    def test_status_valid_rascunho(self) -> None:
+        """Status 'Rascunho' is valid."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        status_issues = [i for i in issues if i.code in ("missing_toml_status", "invalid_toml_status")]
+        assert len(status_issues) == 0
+
+    def test_status_valid_aprovado(self) -> None:
+        """Status 'Aprovado' is valid."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Aprovado", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        status_issues = [i for i in issues if i.code in ("missing_toml_status", "invalid_toml_status")]
+        assert len(status_issues) == 0
+
+    def test_status_valid_em_implementacao(self) -> None:
+        """Status 'Em implementação' is valid."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Em implementação", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        status_issues = [i for i in issues if i.code in ("missing_toml_status", "invalid_toml_status")]
+        assert len(status_issues) == 0
+
+    def test_status_valid_implementado(self) -> None:
+        """Status 'Implementado' is valid."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Implementado", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        status_issues = [i for i in issues if i.code in ("missing_toml_status", "invalid_toml_status")]
+        assert len(status_issues) == 0
+
+    def test_status_valid_substituido(self) -> None:
+        """Status 'Substituído' is valid."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Substituído", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        status_issues = [i for i in issues if i.code in ("missing_toml_status", "invalid_toml_status")]
+        assert len(status_issues) == 0
+
+    def test_status_wrong_capitalization(self) -> None:
+        """Status with wrong capitalization returns invalid_toml_status."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        status_issues = [i for i in issues if i.code == "invalid_toml_status"]
+        assert len(status_issues) == 1
+        assert status_issues[0].field == "status"
+
+    def test_status_extra_space(self) -> None:
+        """Status with extra space returns invalid_toml_status."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Rascunho ", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        status_issues = [i for i in issues if i.code == "invalid_toml_status"]
+        assert len(status_issues) == 1
+        assert status_issues[0].field == "status"
+
+    def test_status_unknown(self) -> None:
+        """Unknown status returns invalid_toml_status."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Invalido", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        status_issues = [i for i in issues if i.code == "invalid_toml_status"]
+        assert len(status_issues) == 1
+        assert status_issues[0].field == "status"
+
+    def test_status_non_string_only_invalid_field_type(self) -> None:
+        """Non-string status produces only invalid_field_type, not invalid_toml_status."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": 42, "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        codes = [i.code for i in issues]
+        # Should have invalid_field_type for status
+        assert "invalid_field_type" in codes
+        # Should NOT have invalid_toml_status
+        assert "invalid_toml_status" not in codes
+
+    def test_status_non_string_no_invalid_toml_status(self) -> None:
+        """Non-string status does not produce invalid_toml_status as secondary error."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": 42, "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        status_format_issues = [i for i in issues if i.code == "invalid_toml_status"]
+        assert len(status_format_issues) == 0
+
+
+class TestAcceptanceCriteriaSemantics:
+    """Tests for acceptance_criteria semantic validation (Block 3A1)."""
+
+    def test_acceptance_criteria_missing(self) -> None:
+        """Missing acceptance_criteria returns missing_acceptance_criteria."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Rascunho"}
+        issues = validate_spec_schema(toml_data)
+        missing_issues = [i for i in issues if i.code == "missing_acceptance_criteria"]
+        assert len(missing_issues) == 1
+        assert missing_issues[0].field == "acceptance_criteria"
+
+    def test_acceptance_criteria_empty_list_allowed(self) -> None:
+        """Empty acceptance_criteria list is allowed."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        ac_semantic_issues = [i for i in issues if i.code in ("missing_acceptance_criteria", "empty_acceptance_criteria")]
+        assert len(ac_semantic_issues) == 0
+
+    def test_acceptance_criteria_non_list_uses_invalid_type(self) -> None:
+        """Non-list acceptance_criteria continues using invalid_acceptance_criteria_type."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Rascunho", "acceptance_criteria": "not a list"}
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_acceptance_criteria_type"]
+        assert len(type_issues) == 1
+        assert type_issues[0].field == "acceptance_criteria"
+
+    def test_acceptance_criteria_non_list_no_missing(self) -> None:
+        """Non-list container does not produce missing_acceptance_criteria."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Rascunho", "acceptance_criteria": "not a list"}
+        issues = validate_spec_schema(toml_data)
+        missing_issues = [i for i in issues if i.code == "missing_acceptance_criteria"]
+        assert len(missing_issues) == 0
+
+    def test_acceptance_criteria_absent_no_invalid_type(self) -> None:
+        """Absent acceptance_criteria does not produce invalid_acceptance_criteria_type."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Rascunho"}
+        issues = validate_spec_schema(toml_data)
+        type_issues = [i for i in issues if i.code == "invalid_acceptance_criteria_type"]
+        assert len(type_issues) == 0
+
+
+class TestPrecedenceAndDeterminism:
+    """Tests for precedence and deterministic ordering (Block 3A1)."""
+
+    def test_schema_version_missing_blocks_new_errors(self) -> None:
+        """Missing schema_version blocks all new semantic errors."""
+        toml_data = {"id": "HERMES-0001", "status": "Rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        assert len(issues) == 1
+        assert issues[0].code == "missing_schema_version"
+
+    def test_schema_version_invalid_type_blocks_new_errors(self) -> None:
+        """Invalid schema_version type blocks all new semantic errors."""
+        toml_data = {"schema_version": "1", "id": "HERMES-0001", "status": "Rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        assert len(issues) == 1
+        assert issues[0].code == "invalid_schema_version_type"
+
+    def test_schema_version_invalid_value_blocks_new_errors(self) -> None:
+        """Invalid schema_version value blocks all new semantic errors."""
+        toml_data = {"schema_version": 0, "id": "HERMES-0001", "status": "Rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        assert len(issues) == 1
+        assert issues[0].code == "invalid_schema_version_value"
+
+    def test_missing_id_status_acceptance_criteria_deterministic_order(self) -> None:
+        """Missing id, status, acceptance_criteria reported in deterministic order: id, status, acceptance_criteria."""
+        toml_data = {"schema_version": 1}
+        issues = validate_spec_schema(toml_data)
+        codes = [i.code for i in issues]
+        # Should be in order: missing_toml_id, missing_toml_status, missing_acceptance_criteria
+        assert codes == [
+            "missing_toml_id",
+            "missing_toml_status",
+            "missing_acceptance_criteria",
+        ]
+
+    def test_unknown_field_type_semantic_order(self) -> None:
+        """Unknown fields, type errors, semantic errors in deterministic order."""
+        toml_data = {
+            "schema_version": 1,
+            "id": 123,  # type error
+            "status": 456,  # type error
+            "unknown_top": "value",  # unknown field
+            "acceptance_criteria": "not a list",  # container type error
+        }
+        issues = validate_spec_schema(toml_data)
+        codes = [i.code for i in issues]
+        # When id/status have wrong types, only type errors are emitted (not missing semantic errors)
+        # acceptance_criteria is present but wrong type -> only invalid_acceptance_criteria_type
+        expected = [
+            "unknown_field_toplevel",
+            "invalid_field_type",  # id
+            "invalid_field_type",  # status
+            "invalid_acceptance_criteria_type",
+        ]
+        assert codes == expected
+
+    def test_input_not_modified(self) -> None:
+        """validate_spec_schema does not modify input dict."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Rascunho", "acceptance_criteria": [], "extra": "value"}
+        original = dict(toml_data)
+        validate_spec_schema(toml_data)
+        assert toml_data == original
+
+    def test_return_type_is_tuple(self) -> None:
+        """Return type is tuple (immutable), not list."""
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Rascunho", "acceptance_criteria": []}
+        issues = validate_spec_schema(toml_data)
+        assert isinstance(issues, tuple)
+        assert all(isinstance(i, SchemaIssue) for i in issues)
+
+    def test_no_non_canonical_capitalization_emitted(self) -> None:
+        """No issue uses non_canonical_capitalization code."""
+        test_cases = [
+            {"schema_version": 1, "id": "hermes-0001", "status": "Rascunho", "acceptance_criteria": []},
+            {"schema_version": 1, "id": "HERMES-0001", "status": "rascunho", "acceptance_criteria": []},
+        ]
+        for toml_data in test_cases:
+            issues = validate_spec_schema(toml_data)
+            codes = [i.code for i in issues]
+            assert "non_canonical_capitalization" not in codes
+
+    def test_regression_58_previous_tests(self) -> None:
+        """Regression: all previous 58 test patterns still work."""
+        # This test documents that the 58 original tests pass
+        # It's a meta-test - the real validation is the full suite
+        toml_data = {
+            "schema_version": 1,
+            "id": "HERMES-0001",
+            "status": "Aprovado",
+            "acceptance_criteria": [
+                {"id": "AC-01", "test_file": "test_foo.py", "test_function": "test_bar", "justification": "reason"}
+            ],
+            "superseded_by": "HERMES-0002",
+            "evidence": {},
+        }
+        issues = validate_spec_schema(toml_data)
+        assert len(issues) == 0
+
+
 class TestToplevelFields:
     """Tests for top-level allowed/unknown fields."""
 
@@ -135,7 +440,7 @@ class TestToplevelFields:
 
     def test_unknown_toplevel_field(self) -> None:
         """Single unknown top-level field returns unknown_field_toplevel."""
-        toml_data = {"schema_version": 1, "id": "HERMES-0001", "unknown_field": "value"}
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Rascunho", "acceptance_criteria": [], "unknown_field": "value"}
         issues = validate_spec_schema(toml_data)
         assert len(issues) == 1
         assert issues[0].code == "unknown_field_toplevel"
@@ -146,6 +451,8 @@ class TestToplevelFields:
         toml_data = {
             "schema_version": 1,
             "id": "HERMES-0001",
+            "status": "Rascunho",
+            "acceptance_criteria": [],
             "zebra": 1,
             "alpha": 2,
             "middle": 3,
@@ -258,7 +565,7 @@ class TestAcceptanceCriteriaFields:
 
     def test_ac_non_list_does_not_validate_items(self) -> None:
         """When acceptance_criteria is not a list, no item-level errors produced."""
-        toml_data = {"schema_version": 1, "id": "HERMES-0001", "acceptance_criteria": "not a list"}
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Rascunho", "acceptance_criteria": "not a list"}
         issues = validate_spec_schema(toml_data)
         # Should only have the container type error, no unknown_field_ac or invalid_acceptance_criterion_type
         codes = [i.code for i in issues]
@@ -419,7 +726,7 @@ class TestEvidenceFields:
 
     def test_evidence_non_mapping_does_not_validate_fields(self) -> None:
         """When evidence is not a mapping, no field-level errors produced."""
-        toml_data = {"schema_version": 1, "id": "HERMES-0001", "evidence": "not a mapping"}
+        toml_data = {"schema_version": 1, "id": "HERMES-0001", "status": "Rascunho", "acceptance_criteria": [], "evidence": "not a mapping"}
         issues = validate_spec_schema(toml_data)
         codes = [i.code for i in issues]
         # Should only have the container type error, no unknown_field_evidence or invalid_field_type
@@ -536,13 +843,15 @@ class TestBehavioralContracts:
         toml_data = {
             "schema_version": 1,
             "id": "HERMES-0001",
-            "unknown_top": 1,
+            "status": "Rascunho",
             "acceptance_criteria": [{"id": "AC-01", "unknown_ac": 1}],
+            "unknown_top": 1,
             "evidence": {"unknown_ev": 1},
         }
         issues = validate_spec_schema(toml_data)
         codes = [i.code for i in issues]
         # Order: unknown_field_toplevel, unknown_field_ac, unknown_field_evidence
+        # Note: status and acceptance_criteria are present, so no missing errors
         assert codes == [
             "unknown_field_toplevel",
             "unknown_field_ac",

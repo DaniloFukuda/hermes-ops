@@ -68,6 +68,19 @@ _EVIDENCE_FIELD_ORDER: tuple[str, ...] = (
     "Limitações do ambiente",
 )
 
+# Valid status values for schema_version 1
+_VALID_STATUSES: frozenset[str] = frozenset({
+    "Rascunho",
+    "Aprovado",
+    "Em implementação",
+    "Implementado",
+    "Substituído",
+})
+
+# Regex for HERMES-NNNN format (exactly 4 digits)
+import re
+_HERMES_ID_PATTERN = re.compile(r"HERMES-[0-9]{4}")
+
 
 def _validate_schema_version(toml_data: dict[str, Any]) -> SchemaIssue | None:
     """Validate schema_version field. Returns SchemaIssue if invalid, None if valid (==1)."""
@@ -257,6 +270,83 @@ def _validate_evidence(toml_data: dict[str, Any]) -> list[SchemaIssue]:
     return issues
 
 
+def _validate_toml_id(toml_data: dict[str, Any]) -> list[SchemaIssue]:
+    """Validate id field semantics (HERMES-NNNN format)."""
+    issues = []
+    if "id" not in toml_data:
+        issues.append(SchemaIssue(
+            code="missing_toml_id",
+            field="id",
+            message="id is required",
+        ))
+        return issues
+
+    value = toml_data["id"]
+    if not isinstance(value, str):
+        # Type error already handled in _validate_toplevel_field_types
+        # Do not emit invalid_toml_id_format as secondary error
+        return issues
+
+    if not _HERMES_ID_PATTERN.fullmatch(value):
+        issues.append(SchemaIssue(
+            code="invalid_toml_id_format",
+            field="id",
+            message="id must match format HERMES-NNNN (exactly 4 digits)",
+        ))
+
+    return issues
+
+
+def _validate_toml_status(toml_data: dict[str, Any]) -> list[SchemaIssue]:
+    """Validate status field semantics."""
+    issues = []
+    if "status" not in toml_data:
+        issues.append(SchemaIssue(
+            code="missing_toml_status",
+            field="status",
+            message="status is required",
+        ))
+        return issues
+
+    value = toml_data["status"]
+    if not isinstance(value, str):
+        # Type error already handled in _validate_toplevel_field_types
+        # Do not emit invalid_toml_status as secondary error
+        return issues
+
+    if value not in _VALID_STATUSES:
+        issues.append(SchemaIssue(
+            code="invalid_toml_status",
+            field="status",
+            message="status must be one of: Rascunho, Aprovado, Em implementação, Implementado, Substituído",
+        ))
+
+    return issues
+
+
+def _validate_acceptance_criteria_semantics(toml_data: dict[str, Any]) -> list[SchemaIssue]:
+    """Validate acceptance_criteria field semantics (presence only)."""
+    issues = []
+    if "acceptance_criteria" not in toml_data:
+        issues.append(SchemaIssue(
+            code="missing_acceptance_criteria",
+            field="acceptance_criteria",
+            message="acceptance_criteria is required",
+        ))
+        return issues
+
+    value = toml_data["acceptance_criteria"]
+    if not isinstance(value, list):
+        # Type error already handled in _validate_acceptance_criteria
+        # Do not emit missing_acceptance_criteria as secondary error
+        return issues
+
+    # Empty list is allowed in this block
+    # Non-empty list items validated in _validate_acceptance_criteria
+
+    return issues
+
+
 def validate_spec_schema(toml_data: dict[str, Any]) -> tuple[SchemaIssue, ...]:
     """Validate TOML data against schema_version 1 closed schema.
 
@@ -268,13 +358,16 @@ def validate_spec_schema(toml_data: dict[str, Any]) -> tuple[SchemaIssue, ...]:
         1. schema_version issues (if any)
         2. Unknown top-level fields (alphabetical)
         3. Types of known top-level fields (id, status, superseded_by)
-        4. acceptance_criteria:
+        4. id semantic validation (missing_toml_id, invalid_toml_id_format)
+        5. status semantic validation (missing_toml_status, invalid_toml_status)
+        6. acceptance_criteria:
            - container type error when applicable
            - items in original order
            - for Mapping items:
              a. unknown fields alphabetical
              b. known field types in order: id, test_file, test_function, justification
-        5. evidence:
+        7. acceptance_criteria semantic validation (missing_acceptance_criteria)
+        8. evidence:
            - container type error when applicable
            - unknown fields alphabetical
            - known field types in canonical order
@@ -297,10 +390,19 @@ def validate_spec_schema(toml_data: dict[str, Any]) -> tuple[SchemaIssue, ...]:
     # 3. Types of known top-level fields (id, status, superseded_by)
     issues.extend(_validate_toplevel_field_types(toml_data))
 
-    # 4. acceptance_criteria
+    # 4. id semantic validation (missing_toml_id, invalid_toml_id_format)
+    issues.extend(_validate_toml_id(toml_data))
+
+    # 5. status semantic validation (missing_toml_status, invalid_toml_status)
+    issues.extend(_validate_toml_status(toml_data))
+
+    # 6. acceptance_criteria structure and field types
     issues.extend(_validate_acceptance_criteria(toml_data))
 
-    # 5. evidence
+    # 7. acceptance_criteria semantic validation (missing_acceptance_criteria)
+    issues.extend(_validate_acceptance_criteria_semantics(toml_data))
+
+    # 8. evidence
     issues.extend(_validate_evidence(toml_data))
 
     return tuple(issues)
