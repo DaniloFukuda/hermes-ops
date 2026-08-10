@@ -121,7 +121,7 @@ test_function = "test_validation_is_deterministic"
 [[acceptance_criteria]]
 id = "AC-30"
 test_file = "tests/test_skills.py"
-test_function = "test_phase_has_no_registry_runner_or_cli"
+test_function = "test_skills_api_has_no_runner_execution_pipeline_or_cli"
 +++
 
 # HERMES-0003 — Contratos e Carregamento de Skills
@@ -689,7 +689,11 @@ sem fundi-las semanticamente com contrato inválido.
 - **AC-27**: `requires` não instala, importa ou executa dependências, e `allows_write` não autoriza escrita.
 - **AC-28**: A implementação usa somente a biblioteca padrão e não adiciona PyYAML nem outra dependência YAML.
 - **AC-29**: O mesmo arquivo, caminho e contrato v1 produzem deterministicamente o mesmo resultado ou o mesmo erro.
-- **AC-30**: Esta fase não expõe registry, runner, execução, pipelines ou CLI de skills.
+- **AC-30**: Na fase HERMES-0003 não eram expostos registry, discovery,
+  runner, execução, pipelines ou CLI de skills. A HERMES-0004 supersede somente
+  a restrição limitada àquela fase contra registry e discovery; permanecem
+  invariantes a ausência de runner, `run_skill`, execução, pipeline e CLI
+  operacional de skills.
 
 ## Plano de Testes
 
@@ -728,7 +732,7 @@ deverá referenciar `Spec: HERMES-0003 / AC-NN` em docstring ou comentário.
 | AC-27 | Segurança | `tests/test_skills.py` | `test_declarations_do_not_grant_capabilities` | `requires` e `allows_write` não causam efeitos |
 | AC-28 | Estrutural | `tests/test_skills.py` | `test_no_external_yaml_dependency` | Nenhuma dependência ou import YAML externo |
 | AC-29 | Unitário | `tests/test_skills.py` | `test_validation_is_deterministic` | Repetições produzem resultado idêntico |
-| AC-30 | Estrutural | `tests/test_skills.py` | `test_phase_has_no_registry_runner_or_cli` | Escopo não inclui superfícies futuras |
+| AC-30 | Estrutural | `tests/test_skills.py` | `test_skills_api_has_no_runner_execution_pipeline_or_cli` | Após a extensão da HERMES-0004, runner, execução, pipeline e CLI operacional continuam ausentes |
 
 Os testes de segurança abrangem comportamento permitido, comportamento
 bloqueado e regressão: carregamento do contrato real permitido; construções
@@ -825,3 +829,4 @@ os critérios de aceitação desta especificação.
 | 2026-08-09 | Codex | Fechamento da gramática textual v1 e definição de `path` e `body` em `SkillDefinition` | Correção após auditoria |
 | 2026-08-09 | Codex | Promoção do status para Aprovado após auditoria final, com `justification` documental para os ACs sem testes implementados | Auditoria final concluída sem divergências materiais |
 | 2026-08-10 | Codex | Promoção do status para Implementado, substituição das justificativas temporárias por vínculos reais AC→teste e registro das evidências finais do SKILL-2 | Commit `ad462f0`; auditoria final e validações concluídas sem divergências |
+| 2026-08-10 | Codex | Reconciliação do AC-30 com a extensão posterior da HERMES-0004: registry e discovery deixam de ser proibição permanente; runner, execução, pipeline e CLI operacional permanecem fora do escopo | Supersessão limitada pela HERMES-0004; sem alteração do loader, parser ou modelo |

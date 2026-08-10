@@ -322,7 +322,11 @@ total nem parcial. Nenhum arquivo, processo, dependência, plugin ou estado Git
 18. Falhas não expõem caminhos locais sem passar pela sanitização central em
     qualquer futura interface pública.
 19. A implementação usa Python 3.11 e somente a biblioteca padrão.
-20. A HERMES-0003 permanece compatível e inalterada.
+20. O contrato existente de `load_skill`, parser v1, validator,
+    `SkillDefinition`, enums e `SkillContractError` da HERMES-0003 permanece
+    compatível. Esta especificação estende deliberadamente a API pública com
+    registry e discovery e supersede somente a restrição limitada à fase
+    HERMES-0003 contra essas duas superfícies.
 
 ## Pseudocódigo
 
@@ -513,7 +517,8 @@ fora desta versão. Toda inconsistência observada ainda falha de forma fechada.
   plugin loading ou dependência externa.
 - **AC-25**: O comportamento público de `load_skill`, `SkillDefinition`,
   `SkillStatus`, `SkillRisk` e `SkillContractError` permanece compatível com a
-  HERMES-0003.
+  HERMES-0003. A extensão com `SkillRegistry` e `discover_skills` supersede
+  somente a ausência de registry e discovery naquela fase.
 - **AC-26**: Conteúdo adicional e diretórios comuns dentro de candidato válido
   não são percorridos, interpretados ou carregados.
 - **AC-27**: Para a mesma coleção lógica e os mesmos bytes, inclusive quando
@@ -554,7 +559,7 @@ repositórios somente em diretórios temporários.
 | AC-22 | Segurança | `tests/test_skill_registry.py` | `test_discovery_does_not_modify_git` | Git permanece inalterado |
 | AC-23 | Estrutural | `tests/test_skill_registry.py` | `test_public_api_has_no_runner_pipeline_or_cli` | Superfície pública permanece somente leitura |
 | AC-24 | Estrutural | `tests/test_skill_registry.py` | `test_registry_has_no_operational_dependencies` | Sem shell, subprocesso, import dinâmico ou plugin |
-| AC-25 | Regressão | `tests/test_skill_registry.py` | `test_skill_contract_public_api_remains_compatible` | HERMES-0003 não sofre regressão |
+| AC-25 | Regressão | `tests/test_skill_registry.py` | `test_skill_contract_public_api_remains_compatible` | Loader, parser e modelo da HERMES-0003 não sofrem regressão; registry e discovery são a extensão aprovada |
 | AC-26 | Segurança | `tests/test_skill_registry.py` | `test_candidate_contents_are_not_recursively_inspected` | Conteúdo adicional fica inerte |
 | AC-27 | Unitário | `tests/test_skill_registry.py` | `test_controlled_reverse_enumeration_is_deterministic` | Seam limitada de enumeração invertida não altera resultado nem primeira falha |
 
@@ -685,3 +690,4 @@ somente depois da implementação e das validações correspondentes.
 | 2026-08-10 | Codex | Criação inicial da especificação em status Rascunho, com API proposta, discovery fail-closed e política estrita de caminhos | Solicitação SKILL-3 |
 | 2026-08-10 | Codex | Fechamento da inspeção de ancestrais, distinção de name-surrogate, remoção do escape conceitual e fortalecimento dos testes de atomicidade, colisão e determinismo | Correção após auditoria da HERMES-0004 |
 | 2026-08-10 | Codex | Promoção do status para Aprovado e registro de justificativas documentais temporárias para os 27 ACs ainda sem implementação | Auditoria final concluída sem contradições materiais |
+| 2026-08-10 | Codex | Esclarecimento de que registry e discovery estendem a API e supersedem somente a restrição limitada à fase HERMES-0003, preservando loader, parser, modelo e segurança | Reconciliação HERMES-0003 / AC-30; sem alteração do comportamento do registry |
