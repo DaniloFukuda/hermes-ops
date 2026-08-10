@@ -27,3 +27,11 @@ class ConfigurationSchemaError(ConfigurationError):
 
 class ConfigurationUnsafePathError(ConfigurationError):
     """The configuration path uses a symlink, junction, or reparse point."""
+
+
+class SkillContractError(HermesOpsError):
+    """A SKILL.md file cannot be loaded under the version 1 contract."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
