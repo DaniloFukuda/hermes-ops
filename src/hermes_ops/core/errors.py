@@ -51,3 +51,11 @@ class SkillPolicyError(HermesOpsError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+class SkillExecutionError(HermesOpsError):
+    """A planned skill cannot cross the closed execution boundary."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code

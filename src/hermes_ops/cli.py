@@ -8,6 +8,17 @@ from pathlib import Path
 from hermes_ops.commands.doctor import run_doctor
 from hermes_ops.commands.preflight import run_preflight
 from hermes_ops.commands.worktree import run_worktree
+from hermes_ops.commands.skill import (
+    run_skill_command,
+    skill_result_json,
+    skill_result_text,
+)
+from hermes_ops.core.errors import (
+    SkillContractError,
+    SkillExecutionError,
+    SkillPolicyError,
+    SkillRegistryError,
+)
 from hermes_ops.core.results import Report
 from hermes_ops.core.presentation import PublicSanitizer
 
@@ -27,6 +38,17 @@ def build_parser() -> argparse.ArgumentParser:
             default="text",
             help="Output format (default: text)",
         )
+    skill = subparsers.add_parser("skill")
+    skill_commands = skill.add_subparsers(dest="skill_command", required=True)
+    skill_run = skill_commands.add_parser("run")
+    skill_run.add_argument("skill_id")
+    skill_run.add_argument("--project", required=True, help="Project path to inspect")
+    skill_run.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Output format (default: text)",
+    )
     return parser
 
 
@@ -40,6 +62,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (OSError, RuntimeError):
         public_root = args.project
     sanitizer = PublicSanitizer.for_project(public_root)
+    if args.command == "skill":
+        return _run_skill_cli(args, sanitizer)
     try:
         report = _dispatch(args.command, args.project)
     except Exception as exc:  # final boundary: expected callers get no traceback
@@ -81,3 +105,49 @@ def _dispatch(command: str, project: str) -> Report:
     if command == "preflight":
         return run_preflight(project)
     raise ValueError(f"Unknown command: {command}")
+
+
+def _run_skill_cli(args: argparse.Namespace, sanitizer: PublicSanitizer) -> int:
+    try:
+        result = run_skill_command(args.project, args.skill_id)
+    except (SkillContractError, SkillRegistryError, SkillPolicyError, SkillExecutionError) as exc:
+        exit_code = 2 if getattr(exc, "code", "") == "SKILL_EXECUTION_INVALID" else 3
+        payload = {
+            "skill_id": args.skill_id,
+            "exit_code": exit_code,
+            "error": {
+                "code": getattr(exc, "code", type(exc).__name__),
+                "message": sanitizer.sanitize_text(str(exc)),
+            },
+        }
+        if args.format == "json":
+            import json
+
+            print(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+        else:
+            print(f"ERRO {payload['error']['code']}: {payload['error']['message']}", file=sys.stderr)
+            print(f"exit_code={exit_code}", file=sys.stderr)
+        return exit_code
+    except Exception as exc:
+        payload = {
+            "skill_id": args.skill_id,
+            "exit_code": 4,
+            "error": {
+                "code": "external_failure",
+                "message": sanitizer.sanitize_text(str(exc)),
+            },
+        }
+        if args.format == "json":
+            import json
+
+            print(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+        else:
+            print(f"ERRO external_failure: {payload['error']['message']}", file=sys.stderr)
+            print("exit_code=4", file=sys.stderr)
+        return 4
+    print(
+        skill_result_json(result, sanitizer)
+        if args.format == "json"
+        else skill_result_text(result, sanitizer)
+    )
+    return result.exit_code
