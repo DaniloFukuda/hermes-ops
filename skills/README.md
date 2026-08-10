@@ -7,7 +7,7 @@ evidências e pós-condições. O arquivo SKILL.md não concede permissões nem
 acesso direto ao sistema. As capacidades continuam sob controle do núcleo
 do Hermes.
 
-## Descoberta
+## Layout canônico
 
 Cada skill deve existir no formato:
 
@@ -17,7 +17,8 @@ O nome do diretório deve ser igual ao campo `id` declarado no front matter.
 
 ## Contrato v1
 
-Todo SKILL.md deve começar com front matter YAML contendo:
+Todo SKILL.md deve começar com o front matter textual delimitado por `---`
+contendo:
 
 - `schema_version`
 - `id`
@@ -125,16 +126,17 @@ Após o front matter, todo SKILL.md deve possuir as seguintes seções:
 9. A ausência de permissão deve resultar em bloqueio, não em fallback inseguro.
 10. O contrato deve ser validado antes de qualquer futura execução.
 
-## Estado desta fase
+## Estado atual
 
-Nesta primeira fase, SKILL.md é somente um contrato declarativo.
+O contrato v1 e seu carregamento passivo estão implementados conforme a
+HERMES-0003. O pacote `hermes_ops.skills` fornece `load_skill` para carregar e
+validar explicitamente um `SKILL.md`, além dos tipos imutáveis
+`SkillDefinition`, `SkillStatus` e `SkillRisk`.
 
-Ainda não existem:
+O carregamento apenas lê e valida o contrato; ele não executa a skill.
+`requires` e `allows_write` continuam declarativos e não instalam dependências
+nem concedem capacidades.
 
-- loader de skills;
-- registry;
-- runner;
-- execução automática;
-- concessão de capacidades baseada no arquivo.
-
-Esses componentes serão adicionados em fases posteriores.
+Ainda não existem execução de skills, runner, pipeline ou registry/discovery.
+Registry e discovery estão somente especificados e aprovados pela HERMES-0004;
+essa funcionalidade ainda não foi implementada.
