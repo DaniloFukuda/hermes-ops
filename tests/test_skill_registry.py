@@ -130,9 +130,8 @@ def _make_junction(link: Path, target: Path) -> None:
     completed = subprocess.run(
         ("cmd", "/c", "mklink", "/J", str(link), str(target)),
         check=False,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     if completed.returncode != 0:
         pytest.skip("Directory junction fixture is unavailable")
