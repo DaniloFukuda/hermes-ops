@@ -1,95 +1,122 @@
 +++
 schema_version = 1
 id = "HERMES-0004"
-status = "Aprovado"
+status = "Implementado"
 [[acceptance_criteria]]
 id = "AC-01"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_discovery_uses_only_explicit_project_root"
 [[acceptance_criteria]]
 id = "AC-02"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_empty_skills_directory_returns_empty_registry"
 [[acceptance_criteria]]
 id = "AC-03"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_missing_skills_directory_is_explicit_error"
 [[acceptance_criteria]]
 id = "AC-04"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_discovery_uses_real_load_skill"
 [[acceptance_criteria]]
 id = "AC-05"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_equivalent_trees_with_different_creation_order_match"
 [[acceptance_criteria]]
 id = "AC-06"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_get_by_id_returns_exact_skill"
 [[acceptance_criteria]]
 id = "AC-07"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_get_by_id_returns_none_for_unknown_id"
 [[acceptance_criteria]]
 id = "AC-08"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_loose_file_aborts_discovery"
 [[acceptance_criteria]]
 id = "AC-09"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_candidate_without_contract_aborts_discovery"
 [[acceptance_criteria]]
 id = "AC-10"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_hidden_or_invalid_candidate_name_is_blocked"
 [[acceptance_criteria]]
 id = "AC-11"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_discovery_never_recurses_for_contracts"
 [[acceptance_criteria]]
 id = "AC-12"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_later_invalid_skill_exposes_no_partial_registry"
 [[acceptance_criteria]]
 id = "AC-13"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_registry_constructor_rejects_duplicate_id"
 [[acceptance_criteria]]
 id = "AC-14"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_indirect_protected_paths_are_blocked"
 [[acceptance_criteria]]
 id = "AC-15"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_indirect_project_root_ancestor_is_blocked"
 [[acceptance_criteria]]
 id = "AC-16"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_inspection_failure_is_controlled"
 [[acceptance_criteria]]
 id = "AC-17"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_registry_is_immutable"
 [[acceptance_criteria]]
 id = "AC-18"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_discovery_never_executes_content"
 [[acceptance_criteria]]
 id = "AC-19"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_requires_remains_inert"
 [[acceptance_criteria]]
 id = "AC-20"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_allows_write_remains_declarative"
 [[acceptance_criteria]]
 id = "AC-21"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_discovery_does_not_modify_files"
 [[acceptance_criteria]]
 id = "AC-22"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_discovery_does_not_modify_git"
 [[acceptance_criteria]]
 id = "AC-23"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_public_api_has_no_runner_pipeline_or_cli"
 [[acceptance_criteria]]
 id = "AC-24"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_registry_has_no_operational_dependencies"
 [[acceptance_criteria]]
 id = "AC-25"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_skill_contract_public_api_remains_compatible"
 [[acceptance_criteria]]
 id = "AC-26"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_candidate_contents_are_not_recursively_inspected"
 [[acceptance_criteria]]
 id = "AC-27"
-justification = "No estágio Aprovado, a implementação e o teste automatizado ainda não existem; a cobertura deste critério está definida no Plano de Testes. Esta justificativa documental é temporária até a implementação."
+test_file = "tests/test_skill_registry.py"
+test_function = "test_controlled_reverse_enumeration_is_deterministic"
 +++
 
 # HERMES-0004 — Registry e Discovery Controlado de Skills
 
 ## Status
 
-Aprovado
+Implementado
 
 ## Resumo para o Responsável pelo Projeto
 
@@ -667,21 +694,27 @@ Não se prevê alteração em `models.py`, `loader.py`, `validator.py`, CLI,
 
 ## Evidências da Implementação
 
-A implementação ainda não foi iniciada e os testes da HERMES-0004 ainda não
-foram criados. A especificação está `Aprovada` após auditoria final, sem
-contradições materiais restantes; as evidências concretas serão registradas
-somente depois da implementação e das validações correspondentes.
+A implementação de registry e discovery foi concluída na branch
+`feature/skills-contract`. A auditoria final confirmou segurança somente
+leitura, `SkillRegistry` imutável, discovery fail-closed, atomicidade,
+determinismo, integração com o `load_skill` real e proteção de ancestrais e
+indireções. Não foram adicionadas dependências externas, runner, execução,
+pipeline ou CLI operacional de skills; `requires` e `allows_write` permanecem
+inertes.
 
 | Campo | Valor |
 |-------|-------|
-| Commit | Pendente após aprovação e implementação |
-| Testes direcionados | Pendente após implementação |
-| Suíte completa | Pendente após implementação |
-| compileall | Pendente após implementação |
-| Empacotamento | Pendente após implementação |
-| git diff --check | Pendente após implementação |
-| Plataformas validadas | Pendente após implementação |
-| Limitações do ambiente | Pendente após implementação |
+| Commit da implementação | `d6164f3` |
+| Estado da integração | Concluído na branch `feature/skills-contract`; ainda não integrado |
+| Arquivos alterados | `src/hermes_ops/core/errors.py`, `src/hermes_ops/skills/__init__.py`, `src/hermes_ops/skills/registry.py`, `tests/test_skill_registry.py`, além da reconciliação documental em HERMES-0003/HERMES-0004 e atualização de `skills/README.md` |
+| Testes direcionados | `.venv\Scripts\python.exe -m pytest tests/test_skill_registry.py` → 35 collected, 29 passed, 6 skipped, 0 failed, 0 errors, exit code 0; `.venv\Scripts\python.exe -m pytest tests/test_skills.py` → 93 collected, 93 passed, 0 failed, exit code 0 |
+| Suíte completa | `.venv\Scripts\python.exe -m pytest` → 243 collected, 235 passed, 8 skipped, 0 failed, 0 errors, exit code 0 |
+| Validação de sintaxe ou compileall | `.venv\Scripts\python.exe -m compileall -q src/hermes_ops` → concluído sem erros, exit code 0 |
+| Empacotamento | Coberto por `tests/test_packaging.py` na suíte completa → 3 testes aprovados |
+| git diff --check | PASS, sem avisos |
+| Plataformas e versões validadas | Windows, Python 3.13.13 |
+| CI | Não aplicável — implementação concluída em branch local, ainda sem integração ou execução de CI |
+| Limitações do ambiente | 6 skips nos testes direcionados: cinco fixtures de symlink indisponíveis por privilégio no Windows e uma fixture portátil de permission-denied indisponível; junctions executadas com sucesso. Na suíte completa, 8 skips ambientais. Após `553f275`, `PytestUnhandledThreadExceptionWarning` e warnings de junction são 0 |
 
 ## Histórico de Alterações
 
@@ -691,3 +724,4 @@ somente depois da implementação e das validações correspondentes.
 | 2026-08-10 | Codex | Fechamento da inspeção de ancestrais, distinção de name-surrogate, remoção do escape conceitual e fortalecimento dos testes de atomicidade, colisão e determinismo | Correção após auditoria da HERMES-0004 |
 | 2026-08-10 | Codex | Promoção do status para Aprovado e registro de justificativas documentais temporárias para os 27 ACs ainda sem implementação | Auditoria final concluída sem contradições materiais |
 | 2026-08-10 | Codex | Esclarecimento de que registry e discovery estendem a API e supersedem somente a restrição limitada à fase HERMES-0003, preservando loader, parser, modelo e segurança | Reconciliação HERMES-0003 / AC-30; sem alteração do comportamento do registry |
+| 2026-08-10 | Codex | Promoção para Implementado, substituição das 27 justificativas temporárias por vínculos reais e registro das evidências finais de segurança e validação | Reconciliação `ad455ed`; implementação `d6164f3`; correção da fixture de junction `553f275` |
