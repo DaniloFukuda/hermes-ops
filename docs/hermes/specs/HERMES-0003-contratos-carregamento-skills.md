@@ -1,104 +1,134 @@
 +++
 schema_version = 1
 id = "HERMES-0003"
-status = "Aprovado"
+status = "Implementado"
 [[acceptance_criteria]]
 id = "AC-01"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_loads_only_explicit_path"
 [[acceptance_criteria]]
 id = "AC-02"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_loads_real_git_preflight_skill"
 [[acceptance_criteria]]
 id = "AC-03"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_utf8_accents_and_invalid_encoding"
 [[acceptance_criteria]]
 id = "AC-04"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_front_matter_boundaries"
 [[acceptance_criteria]]
 id = "AC-05"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_exact_required_fields"
 [[acceptance_criteria]]
 id = "AC-06"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_schema_version_is_exact_textual_one"
 [[acceptance_criteria]]
 id = "AC-07"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_id_format_and_directory_match"
 [[acceptance_criteria]]
 id = "AC-08"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_version_matches_unsigned_positive_decimal"
 [[acceptance_criteria]]
 id = "AC-09"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_status_enum"
 [[acceptance_criteria]]
 id = "AC-10"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_description_is_non_empty_literal_text"
 [[acceptance_criteria]]
 id = "AC-11"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_risk_enum"
 [[acceptance_criteria]]
 id = "AC-12"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_requires_empty_list"
 [[acceptance_criteria]]
 id = "AC-13"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_requires_preserves_order"
 [[acceptance_criteria]]
 id = "AC-14"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_requires_rejects_invalid_grammar_and_items"
 [[acceptance_criteria]]
 id = "AC-15"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_allows_write_literal_booleans"
 [[acceptance_criteria]]
 id = "AC-16"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_allows_write_rejects_non_booleans"
 [[acceptance_criteria]]
 id = "AC-17"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_parser_uses_closed_textual_grammar"
 [[acceptance_criteria]]
 id = "AC-18"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_each_required_section_missing"
 [[acceptance_criteria]]
 id = "AC-19"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_required_sections_unique_and_ordered"
 [[acceptance_criteria]]
 id = "AC-20"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_section_names_must_be_real_h2"
 [[acceptance_criteria]]
 id = "AC-21"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_markdown_body_is_preserved_in_skill_definition"
 [[acceptance_criteria]]
 id = "AC-22"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_skill_definition_is_immutable"
 [[acceptance_criteria]]
 id = "AC-23"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_validation_failure_has_no_partial_result"
 [[acceptance_criteria]]
 id = "AC-24"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_loader_does_not_modify_files"
 [[acceptance_criteria]]
 id = "AC-25"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_loader_does_not_modify_git"
 [[acceptance_criteria]]
 id = "AC-26"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_loader_never_executes_content"
 [[acceptance_criteria]]
 id = "AC-27"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_declarations_do_not_grant_capabilities"
 [[acceptance_criteria]]
 id = "AC-28"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_no_external_yaml_dependency"
 [[acceptance_criteria]]
 id = "AC-29"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_validation_is_deterministic"
 [[acceptance_criteria]]
 id = "AC-30"
-justification = "No estágio Aprovado, ainda não há implementação nem teste automatizado; a cobertura deste critério está definida no Plano de Testes."
+test_file = "tests/test_skills.py"
+test_function = "test_phase_has_no_registry_runner_or_cli"
 +++
 
 # HERMES-0003 — Contratos e Carregamento de Skills
 
 ## Status
 
-Aprovado
+Implementado
 
 ## Resumo para o Responsável pelo Projeto
 
@@ -767,21 +797,24 @@ os critérios de aceitação desta especificação.
 
 ## Evidências da Implementação
 
-Ainda não há evidências de implementação porque esta especificação está
-`Aprovada` e nenhum código ou teste desta funcionalidade foi criado.
-
 | Campo | Valor |
 |-------|-------|
-| Commit | Pendente após implementação |
-| Testes direcionados | Pendente após implementação |
-| Quantidade aprovada | Pendente após implementação |
-| Suíte completa | Pendente após implementação |
-| compileall | Pendente após implementação |
-| Empacotamento | Pendente após implementação |
-| git diff --check | Pendente após implementação |
-| Validação de `skills/git-preflight/SKILL.md` real | Pendente após implementação |
-| Plataformas validadas | Pendente após implementação |
-| Limitações do ambiente | Pendente após implementação |
+| Commit da implementação | `ad462f0` — `feat(skills): implementa carregamento e validacao de contratos` |
+| Estado da integração | Concluído na branch `feature/skills-contract`; ainda não integrado |
+| Arquivos alterados | `src/hermes_ops/core/errors.py`; `src/hermes_ops/skills/__init__.py`; `src/hermes_ops/skills/models.py`; `src/hermes_ops/skills/loader.py`; `src/hermes_ops/skills/validator.py`; `tests/test_skills.py` |
+| Testes direcionados | `.venv\Scripts\python.exe -m pytest tests/test_skills.py` → 93 collected, 93 passed, 0 failed, 0 errors, exit code 0 |
+| Suíte completa | `.venv\Scripts\python.exe -m pytest` → 208 collected, 206 passed, 2 skipped, 0 failed, 0 errors, exit code 0 |
+| Validação de sintaxe ou compileall | Validação somente leitura com `ast.parse` nos 5 arquivos Python de produção alterados → 5 arquivos válidos, exit code 0 |
+| Empacotamento | Não aplicável — a configuração de distribuição não foi alterada; a suíte completa executou os testes de packaging sem falhas |
+| git diff --check | Sem avisos antes do commit de implementação |
+| Plataformas e versões validadas | Windows, Python 3.13.13 |
+| CI | Não aplicável — integração ainda não realizada |
+| Limitações do ambiente | Symlinks de arquivo e diretório indisponíveis no ambiente Windows; 2 testes ignorados |
+| Preservação LF/CRLF | AC-21 cobre LF e CRLF; prova isolada: `expected_crlf=116`, `actual_crlf=116`, `body_equal=True` |
+| Auditoria final | Segurança, modelo/imutabilidade, parser v1, preservação LF/CRLF, Markdown/H2 e erros/códigos: PASS; nenhum problema bloqueante, importante ou opcional restante |
+| Estado pós-commit | Working tree limpa; Hermes worktree `exit_code=0`; Hermes preflight `exit_code=0` |
+| Dependências e superfícies | Nenhuma dependência externa adicionada; nenhum registry, runner ou CLI criado |
+| Integridade documental | A HERMES-0003 não foi alterada durante a implementação até esta atualização documental |
 
 ## Histórico de Alterações
 
@@ -791,3 +824,4 @@ Ainda não há evidências de implementação porque esta especificação está
 | 2026-08-09 | Codex | Correção da estrutura Markdown e consolidação do contrato v1, pseudocódigo, erros, critérios e plano de testes | Solicitação documental |
 | 2026-08-09 | Codex | Fechamento da gramática textual v1 e definição de `path` e `body` em `SkillDefinition` | Correção após auditoria |
 | 2026-08-09 | Codex | Promoção do status para Aprovado após auditoria final, com `justification` documental para os ACs sem testes implementados | Auditoria final concluída sem divergências materiais |
+| 2026-08-10 | Codex | Promoção do status para Implementado, substituição das justificativas temporárias por vínculos reais AC→teste e registro das evidências finais do SKILL-2 | Commit `ad462f0`; auditoria final e validações concluídas sem divergências |
