@@ -43,3 +43,11 @@ class SkillRegistryError(HermesOpsError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+class SkillPolicyError(HermesOpsError):
+    """Skill planning cannot produce a plan under the supplied policy."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
