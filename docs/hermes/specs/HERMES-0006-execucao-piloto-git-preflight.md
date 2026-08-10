@@ -1,170 +1,222 @@
 +++
 schema_version = 1
 id = "HERMES-0006"
-status = "Aprovado"
+status = "Implementado"
 [[acceptance_criteria]]
 id = "AC-01"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_run_skill_requires_explicit_inputs"
 [[acceptance_criteria]]
 id = "AC-02"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_discovery_precedes_planning_dispatch_and_handler"
 [[acceptance_criteria]]
 id = "AC-03"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_real_registry_and_plan_are_mandatory"
 [[acceptance_criteria]]
 id = "AC-04"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_discovery_failure_prevents_all_later_phases"
 [[acceptance_criteria]]
 id = "AC-05"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_policy_failure_prevents_dispatch_and_handler"
 [[acceptance_criteria]]
 id = "AC-06"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_dispatch_rejects_non_unit_request"
 [[acceptance_criteria]]
 id = "AC-07"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_dispatch_supports_only_git_preflight"
 [[acceptance_criteria]]
 id = "AC-08"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_unsupported_skill_is_blocked_without_fallback"
 [[acceptance_criteria]]
 id = "AC-09"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_dispatch_never_derives_or_discovers_handler"
 [[acceptance_criteria]]
 id = "AC-10"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_dangerous_skill_body_remains_inert"
 [[acceptance_criteria]]
 id = "AC-11"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_git_preflight_reuses_existing_orchestration"
 [[acceptance_criteria]]
 id = "AC-12"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_git_preflight_reports_existing_checks"
 [[acceptance_criteria]]
 id = "AC-13"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_execution_models_are_frozen_slotted_and_deeply_immutable"
 [[acceptance_criteria]]
 id = "AC-14"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_execution_result_has_minimal_ordered_snapshot"
 [[acceptance_criteria]]
 id = "AC-15"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_execution_status_distinguishes_findings_from_no_report"
 [[acceptance_criteria]]
 id = "AC-16"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_result_excludes_body_environment_and_secrets"
 [[acceptance_criteria]]
 id = "AC-17"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_execution_does_not_write_files"
 [[acceptance_criteria]]
 id = "AC-18"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_execution_uses_no_mutating_git_operation"
 [[acceptance_criteria]]
 id = "AC-19"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_processes_use_central_process_boundary"
 [[acceptance_criteria]]
 id = "AC-20"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_user_cannot_supply_process_or_shell"
 [[acceptance_criteria]]
 id = "AC-21"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_execution_does_not_access_network"
 [[acceptance_criteria]]
 id = "AC-22"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_strong_repository_snapshot_is_preserved"
 [[acceptance_criteria]]
 id = "AC-23"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_execution_error_exposes_no_partial_result"
 [[acceptance_criteria]]
 id = "AC-24"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_execution_does_not_mutate_inputs"
 [[acceptance_criteria]]
 id = "AC-25"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_execution_is_deterministic"
 [[acceptance_criteria]]
 id = "AC-26"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_negative_preflight_returns_complete_result_and_exit_code"
 [[acceptance_criteria]]
 id = "AC-27"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_cli.py"
+test_function = "test_skill_run_git_preflight_cli"
 [[acceptance_criteria]]
 id = "AC-28"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_cli.py"
+test_function = "test_skill_run_rejects_operational_flags"
 [[acceptance_criteria]]
 id = "AC-29"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_cli.py"
+test_function = "test_skill_run_output_is_sanitized"
 [[acceptance_criteria]]
 id = "AC-30"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_existing_commands_remain_compatible"
 [[acceptance_criteria]]
 id = "AC-31"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_execution_uses_controlled_temporary_repository"
 [[acceptance_criteria]]
 id = "AC-32"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_unsafe_local_git_config_remains_blocked"
 [[acceptance_criteria]]
 id = "AC-33"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_required_and_optional_git_semantics_are_preserved"
 [[acceptance_criteria]]
 id = "AC-34"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_cli.py"
+test_function = "test_cli_uses_explicit_least_privilege_policy"
 [[acceptance_criteria]]
 id = "AC-35"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_public_surface_has_no_generic_runner_pipeline_or_plugins"
 [[acceptance_criteria]]
 id = "AC-36"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_execution_public_api_exports_only_return_contract_and_entrypoint"
 [[acceptance_criteria]]
 id = "AC-37"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_execution_errors_are_stable_and_deterministic"
 [[acceptance_criteria]]
 id = "AC-38"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_skill_execution_preserves_passive_loader_contract"
 [[acceptance_criteria]]
 id = "AC-39"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_skill_execution_preserves_explicit_discovery_contract"
 [[acceptance_criteria]]
 id = "AC-40"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_skill_execution_requires_approved_plan"
 [[acceptance_criteria]]
 id = "AC-41"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_real_repository_contract_discovers_and_plans"
 [[acceptance_criteria]]
 id = "AC-42"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_requirements_never_auto_authorize_policy"
 [[acceptance_criteria]]
 id = "AC-43"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_source_details_mutation_cannot_change_evidence"
 [[acceptance_criteria]]
 id = "AC-44"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_freeze_details_is_recursive_lossless_and_deterministic"
 [[acceptance_criteria]]
 id = "AC-45"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_negative_report_differs_from_structural_execution_failure"
 [[acceptance_criteria]]
 id = "AC-46"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_cli.py"
+test_function = "test_skill_run_semantic_errors_map_to_normative_exit_codes"
 [[acceptance_criteria]]
 id = "AC-47"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_handler_reaches_only_audited_read_only_git_commands"
 [[acceptance_criteria]]
 id = "AC-48"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_controlled_git_process_allowed_arbitrary_process_blocked"
 [[acceptance_criteria]]
 id = "AC-49"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_dispatch_never_calls_dynamic_import_plugin_or_fallback"
 [[acceptance_criteria]]
 id = "AC-50"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_cli.py"
+test_function = "test_generic_valid_id_reaches_closed_dispatch_through_run_skill"
 [[acceptance_criteria]]
 id = "AC-51"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_cli.py"
+test_function = "test_real_repository_dogfooding_exercises_full_skill_pipeline"
 [[acceptance_criteria]]
 id = "AC-52"
-justification = "A especificação foi aprovada antes da implementação; o teste correspondente ainda não existe e sua cobertura futura está definida no Plano de Testes. Esta justification é temporária até a implementação e a criação do teste."
+test_file = "tests/test_skill_execution.py"
+test_function = "test_skill_preflight_semantics_match_legacy_commands"
 +++
 
 # HERMES-0006 — Execução Piloto Read-only da Skill git-preflight
 
 ## Status
 
-Aprovado
+Implementado
 
 ## Resumo para o Responsável pelo Projeto
 
@@ -801,7 +853,7 @@ marcador `Spec: HERMES-0006 / AC-NN`.
 | AC-03 | Integração | tests/test_skill_execution.py | test_real_registry_and_plan_are_mandatory | Registry e plan reais |
 | AC-04 | Segurança | tests/test_skill_execution.py | test_discovery_failure_prevents_all_later_phases | Fail-closed |
 | AC-05 | Segurança | tests/test_skill_execution.py | test_policy_failure_prevents_dispatch_and_handler | Gate efetivo |
-| AC-06 | Unitário | tests/test_skill_execution.py | test_dispatch_rejects_non_unit_plan | Piloto unitário |
+| AC-06 | Unitário | tests/test_skill_execution.py | test_dispatch_rejects_non_unit_request | Piloto unitário |
 | AC-07 | Unitário | tests/test_skill_execution.py | test_dispatch_supports_only_git_preflight | Dispatch literal |
 | AC-08 | Segurança | tests/test_skill_execution.py | test_unsupported_skill_is_blocked_without_fallback | Erro estável |
 | AC-09 | Segurança | tests/test_skill_execution.py | test_dispatch_never_derives_or_discovers_handler | Sem resolução dinâmica |
@@ -833,9 +885,9 @@ marcador `Spec: HERMES-0006 / AC-NN`.
 | AC-35 | Segurança | tests/test_skill_execution.py | test_public_surface_has_no_generic_runner_pipeline_or_plugins | Escopo fechado |
 | AC-36 | API | tests/test_skill_execution.py | test_execution_public_api_exports_only_return_contract_and_entrypoint | Exports mínimos |
 | AC-37 | Unitário | tests/test_skill_execution.py | test_execution_errors_are_stable_and_deterministic | Erros |
-| AC-38 | Regressão | tests/test_skills.py | test_skill_execution_preserves_passive_loader_contract | HERMES-0003 |
-| AC-39 | Regressão | tests/test_skill_registry.py | test_skill_execution_preserves_explicit_discovery_contract | HERMES-0004 |
-| AC-40 | Regressão | tests/test_skill_policy.py | test_skill_execution_requires_approved_plan | HERMES-0005 |
+| AC-38 | Regressão | tests/test_skill_execution.py | test_skill_execution_preserves_passive_loader_contract | HERMES-0003 |
+| AC-39 | Regressão | tests/test_skill_execution.py | test_skill_execution_preserves_explicit_discovery_contract | HERMES-0004 |
+| AC-40 | Regressão | tests/test_skill_execution.py | test_skill_execution_requires_approved_plan | HERMES-0005 |
 | AC-41 | Integração | tests/test_skill_execution.py | test_real_repository_contract_discovers_and_plans | Contrato real até SkillPlan |
 | AC-42 | Segurança | tests/test_skill_execution.py | test_requirements_never_auto_authorize_policy | Sem autoautorização |
 | AC-43 | Unitário | tests/test_skill_execution.py | test_source_details_mutation_cannot_change_evidence | Imutabilidade profunda observável |
@@ -945,19 +997,74 @@ comandos existentes.
 
 ## Evidências da Implementação
 
-Esta especificação está `Aprovada`, mas ainda não foi implementada. Nenhum
-código, teste, CLI ou commit de implementação é declarado nesta seção.
+A implementação foi concluída na branch `feature/skills-contract` após a
+reconciliação contratual controlada. O commit documental desta transição é
+posterior e não se confunde com os commits abaixo.
 
-As evidências pré-implementação já comprovadas são:
+| Campo | Valor |
+|-------|-------|
+| Commit da reconciliação contratual | `37e54fd9d1503a27c6f54e1982ab7a67e9d50d32` — `docs(skills): reconcilia contratos e testes com execucao piloto` |
+| Commit da implementação | `ecc6c4cdd3613f64ad35be8b39e3bef63f7926c6` — `feat(skills): implementa execucao piloto do git-preflight` |
+| Estado da integração | Concluído na branch `feature/skills-contract`; ainda não integrado |
+| Arquivos alterados | `src/hermes_ops/cli.py`, `src/hermes_ops/core/errors.py`, `src/hermes_ops/skills/__init__.py`, `src/hermes_ops/commands/skill.py`, `src/hermes_ops/skills/execution_models.py`, `src/hermes_ops/skills/executor.py`, `tests/test_cli.py`, `tests/test_skill_execution.py` |
+| Testes direcionados | Domínio: 45 passed; CLI HERMES-0006: 12 passed, 10 deselected; regressão skills: 245 passed, 6 skipped; commands legados: 35 passed; 0 falhas e 0 erros |
+| Suíte completa | `.venv\Scripts\python.exe -m pytest` → 378 collected, 370 passed, 8 skipped, 0 failed, 0 errors |
+| Validação de sintaxe ou compileall | `.venv\Scripts\python.exe -m compileall -q src` → PASS, exit code 0 |
+| Empacotamento | Não aplicável — a distribuição e sua configuração não foram alteradas; os testes de packaging permaneceram verdes na suíte completa |
+| git diff --check | PASS, sem avisos |
+| Plataformas e versões validadas | Windows 10, Python 3.13.13 |
+| CI | Não aplicável — implementação e validação concluídas localmente na branch, ainda sem integração |
+| Limitações do ambiente | 8 skips ambientais conhecidos na suíte completa: symlinks indisponíveis no Windows e fixture portátil de permission denied indisponível; 0 warnings novos |
+| Auditoria final | PASS, sem bloqueantes |
 
-| Evidência | Resultado |
-|-----------|-----------|
-| Discovery público no layout atual | `discover_skills(".")` encontra `git-preflight` e constrói `SkillRegistry` |
-| Pipeline declarativo real | O registry descoberto e `plan_skills` produzem `SkillPlan` contendo `git-preflight` |
-| Contrato real | `schema_version=1`, `id=git-preflight`, `version=1`, `status=ACTIVE`, `risk=LOW`, `requires=("git",)`, `allows_write=false` |
-| Policy piloto explícita | `SkillPolicy(LOW, False, frozenset({"git"}))` |
-| Requirement não autoautorizado | Policy sem `"git"` bloqueia com `SKILL_POLICY_REQUIREMENT_UNAVAILABLE` |
-| Layout e fail-closed | A documentação geral saiu de `skills/`; HERMES-0004 e sua regra fail-closed não foram enfraquecidas |
+### Pipeline Real Comprovado
+
+O dogfooding e os testes percorreram o fluxo real, sem registry ou plano
+artificial:
+
+```text
+CLI
+→ run_skill
+→ discover_skills
+→ SkillRegistry
+→ SkillPolicy
+→ plan_skills
+→ SkillPlan
+→ dispatch fechado
+→ handler git-preflight
+→ run_preflight
+→ SkillExecutionResult
+→ formatter
+```
+
+### Segurança Comprovada
+
+- somente `git-preflight` possui handler literal;
+- não existem dynamic import, plugins, entrypoints, fallback, `eval` ou `exec`;
+- o body de `SKILL.md` permanece declarativo e inerte;
+- não existem escrita, Git mutável, rede ou shell arbitrário;
+- subprocessos permanecem limitados ao Git read-only existente via
+  `GitInspector` e à abstração central de processos;
+- a policy é externa e explícita; `available_requires` não deriva de
+  `skill.requires`, e requirements não se autoautorizam;
+- `SkillExecutionEvidence` e `SkillExecutionResult` preservam deep
+  immutability e ordenação determinística;
+- runner genérico, `execute_skill` e pipeline genérico continuam inexistentes.
+
+### Dogfooding Pré-commit
+
+Foi executado sem mock:
+
+```text
+.venv\Scripts\python.exe -m hermes_ops skill run git-preflight --project . --format text
+```
+
+O resultado foi `completed_with_findings`, exit code 3, porque
+`clean_worktree_policy` bloqueou corretamente o working tree com alterações da
+própria implementação ainda não commitadas. O HEAD permaneceu
+`37e54fd9d1503a27c6f54e1982ab7a67e9d50d32`; working tree e refs permaneceram
+idênticas, nenhum stage ou arquivo inesperado apareceu e nenhuma mutação foi
+detectada. Não há evidência registrada de dogfooding pós-commit.
 
 ## Histórico de Alterações
 
@@ -966,3 +1073,4 @@ As evidências pré-implementação já comprovadas são:
 | 2026-08-10 | Codex | Criação do rascunho para execução piloto read-only e fechada de `git-preflight` | Dogfooding da única skill operacional concreta existente |
 | 2026-08-10 | Codex | Promoção para Aprovado após reauditoria final dos 52 critérios, sem bloqueantes | Discovery, planning, policy externa, imutabilidade profunda, exit codes e dogfooding especificados |
 | 2026-08-10 | Codex | Registro explícito da supersessão limitada das antigas ausências phase-scoped de `run_skill` e CLI de skills | Loader, registry, policy e planning permanecem compatíveis; somente o piloto read-only fechado é acrescentado |
+| 2026-08-10 | Codex | Promoção para Implementado, substituição das 52 justifications temporárias por vínculos reais e registro das evidências finais | Reconciliação `37e54fd9d1503a27c6f54e1982ab7a67e9d50d32`; implementação `ecc6c4cdd3613f64ad35be8b39e3bef63f7926c6` |
