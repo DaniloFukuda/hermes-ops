@@ -35,3 +35,11 @@ class SkillContractError(HermesOpsError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+class SkillRegistryError(HermesOpsError):
+    """Skill discovery cannot produce a valid immutable registry."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code

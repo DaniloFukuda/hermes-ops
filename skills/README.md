@@ -137,6 +137,14 @@ O carregamento apenas lê e valida o contrato; ele não executa a skill.
 `requires` e `allows_write` continuam declarativos e não instalam dependências
 nem concedem capacidades.
 
-Ainda não existem execução de skills, runner, pipeline ou registry/discovery.
-Registry e discovery estão somente especificados e aprovados pela HERMES-0004;
-essa funcionalidade ainda não foi implementada.
+O pacote também fornece `SkillRegistry` e `discover_skills(project_root)`. O
+discovery considera somente `<project_root>/skills`, reutiliza `load_skill` e
+produz um resultado imutável, determinístico e fail-closed. A HERMES-0004,
+ainda com Status Aprovado, é a especificação normativa dessa funcionalidade;
+a implementação correspondente está presente no código atual e aguarda
+fechamento documental.
+
+Continuam inexistentes runner, `run_skill`, `execute_skill`, execução de
+`SKILL.md`, pipeline ou CLI operacional de skills, resolução operacional de
+`requires`, autorização por `allows_write`, instalação ou download de skills
+e plugins.
