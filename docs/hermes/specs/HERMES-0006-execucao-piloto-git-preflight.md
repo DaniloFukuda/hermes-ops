@@ -1005,6 +1005,7 @@ posterior e não se confunde com os commits abaixo.
 |-------|-------|
 | Commit da reconciliação contratual | `37e54fd9d1503a27c6f54e1982ab7a67e9d50d32` — `docs(skills): reconcilia contratos e testes com execucao piloto` |
 | Commit da implementação | `ecc6c4cdd3613f64ad35be8b39e3bef63f7926c6` — `feat(skills): implementa execucao piloto do git-preflight` |
+| Commit do fechamento documental | `947460ad658e76b2ca8eacdb9521cd9dc4c12160` — `docs(specs): marca HERMES-0006 como implementada` |
 | Estado da integração | Concluído na branch `feature/skills-contract`; ainda não integrado |
 | Arquivos alterados | `src/hermes_ops/cli.py`, `src/hermes_ops/core/errors.py`, `src/hermes_ops/skills/__init__.py`, `src/hermes_ops/commands/skill.py`, `src/hermes_ops/skills/execution_models.py`, `src/hermes_ops/skills/executor.py`, `tests/test_cli.py`, `tests/test_skill_execution.py` |
 | Testes direcionados | Domínio: 45 passed; CLI HERMES-0006: 12 passed, 10 deselected; regressão skills: 245 passed, 6 skipped; commands legados: 35 passed; 0 falhas e 0 erros |
@@ -1064,7 +1065,22 @@ O resultado foi `completed_with_findings`, exit code 3, porque
 própria implementação ainda não commitadas. O HEAD permaneceu
 `37e54fd9d1503a27c6f54e1982ab7a67e9d50d32`; working tree e refs permaneceram
 idênticas, nenhum stage ou arquivo inesperado apareceu e nenhuma mutação foi
-detectada. Não há evidência registrada de dogfooding pós-commit.
+detectada.
+
+### Dogfooding Pós-commit
+
+Após o commit documental `947460ad658e76b2ca8eacdb9521cd9dc4c12160`, o
+mesmo comando foi executado novamente sem mock e com working tree limpa:
+
+```text
+.venv\Scripts\python.exe -m hermes_ops skill run git-preflight --project . --format text
+```
+
+O resultado foi `passed`, exit code 0, com `git-preflight` encontrado e todas
+as evidências concluídas sem bloqueio. O HEAD antes e depois permaneceu
+`947460ad658e76b2ca8eacdb9521cd9dc4c12160`; working tree permaneceu limpa,
+refs permaneceram idênticas, staging permaneceu vazio, nenhum arquivo
+inesperado apareceu e nenhuma mutação foi detectada.
 
 ## Histórico de Alterações
 
@@ -1074,3 +1090,4 @@ detectada. Não há evidência registrada de dogfooding pós-commit.
 | 2026-08-10 | Codex | Promoção para Aprovado após reauditoria final dos 52 critérios, sem bloqueantes | Discovery, planning, policy externa, imutabilidade profunda, exit codes e dogfooding especificados |
 | 2026-08-10 | Codex | Registro explícito da supersessão limitada das antigas ausências phase-scoped de `run_skill` e CLI de skills | Loader, registry, policy e planning permanecem compatíveis; somente o piloto read-only fechado é acrescentado |
 | 2026-08-10 | Codex | Promoção para Implementado, substituição das 52 justifications temporárias por vínculos reais e registro das evidências finais | Reconciliação `37e54fd9d1503a27c6f54e1982ab7a67e9d50d32`; implementação `ecc6c4cdd3613f64ad35be8b39e3bef63f7926c6` |
+| 2026-08-10 | Codex | Registro do dogfooding pós-commit com working tree limpa, status `passed`, exit code 0 e ausência de mutação | Fechamento documental `947460ad658e76b2ca8eacdb9521cd9dc4c12160` |
