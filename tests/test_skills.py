@@ -562,10 +562,10 @@ def test_validation_is_deterministic(tmp_path: Path) -> None:
     assert errors[0] == errors[1]
 
 
-def test_skills_api_has_no_runner_execution_pipeline_or_cli() -> None:
+def test_skills_api_has_no_generic_runner_execute_skill_or_pipeline() -> None:
     """Spec: HERMES-0003 / AC-30"""
     api = _skills_api()
-    forbidden = {"runner", "run_skill", "execute_skill", "pipeline"}
+    forbidden = {"runner", "execute_skill", "pipeline"}
     assert forbidden.isdisjoint(set(dir(api)))
 
     from hermes_ops.cli import build_parser

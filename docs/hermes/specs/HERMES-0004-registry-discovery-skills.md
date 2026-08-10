@@ -93,7 +93,7 @@ test_function = "test_discovery_does_not_modify_git"
 [[acceptance_criteria]]
 id = "AC-23"
 test_file = "tests/test_skill_registry.py"
-test_function = "test_public_api_has_no_runner_pipeline_or_cli"
+test_function = "test_public_api_has_no_generic_runner_execute_skill_or_pipeline"
 [[acceptance_criteria]]
 id = "AC-24"
 test_file = "tests/test_skill_registry.py"
@@ -538,8 +538,11 @@ fora desta versão. Toda inconsistência observada ainda falha de forma fechada.
 - **AC-21**: Discovery e registry não criam, alteram ou removem arquivos.
 - **AC-22**: Discovery e registry não modificam index, HEAD, referências ou
   configuração Git.
-- **AC-23**: A API pública mínima contém discovery e consulta por ID, sem
-  registry mutável, runner, pipeline ou CLI.
+- **AC-23**: Na fase HERMES-0004, a API pública mínima continha discovery e
+  consulta por ID, sem execução ou CLI. A HERMES-0006 supersede somente a
+  proibição absoluta de `run_skill` e da CLI piloto `skill run`; registry e
+  discovery continuam passivos, e permanecem proibidos runner genérico,
+  `execute_skill`, pipeline e qualquer framework de execução dinâmica.
 - **AC-24**: A implementação não usa shell, subprocesso, import dinâmico,
   plugin loading ou dependência externa.
 - **AC-25**: O comportamento público de `load_skill`, `SkillDefinition`,
@@ -584,7 +587,7 @@ repositórios somente em diretórios temporários.
 | AC-20 | Segurança | `tests/test_skill_registry.py` | `test_allows_write_remains_declarative` | Declaração não concede escrita |
 | AC-21 | Segurança | `tests/test_skill_registry.py` | `test_discovery_does_not_modify_files` | Snapshot do filesystem permanece igual |
 | AC-22 | Segurança | `tests/test_skill_registry.py` | `test_discovery_does_not_modify_git` | Git permanece inalterado |
-| AC-23 | Estrutural | `tests/test_skill_registry.py` | `test_public_api_has_no_runner_pipeline_or_cli` | Superfície pública permanece somente leitura |
+| AC-23 | Estrutural | `tests/test_skill_registry.py` | `test_public_api_has_no_generic_runner_execute_skill_or_pipeline` | A extensão piloto posterior é permitida sem runner genérico, `execute_skill` ou pipeline |
 | AC-24 | Estrutural | `tests/test_skill_registry.py` | `test_registry_has_no_operational_dependencies` | Sem shell, subprocesso, import dinâmico ou plugin |
 | AC-25 | Regressão | `tests/test_skill_registry.py` | `test_skill_contract_public_api_remains_compatible` | Loader, parser e modelo da HERMES-0003 não sofrem regressão; registry e discovery são a extensão aprovada |
 | AC-26 | Segurança | `tests/test_skill_registry.py` | `test_candidate_contents_are_not_recursively_inspected` | Conteúdo adicional fica inerte |
@@ -725,3 +728,4 @@ inertes.
 | 2026-08-10 | Codex | Promoção do status para Aprovado e registro de justificativas documentais temporárias para os 27 ACs ainda sem implementação | Auditoria final concluída sem contradições materiais |
 | 2026-08-10 | Codex | Esclarecimento de que registry e discovery estendem a API e supersedem somente a restrição limitada à fase HERMES-0003, preservando loader, parser, modelo e segurança | Reconciliação HERMES-0003 / AC-30; sem alteração do comportamento do registry |
 | 2026-08-10 | Codex | Promoção para Implementado, substituição das 27 justificativas temporárias por vínculos reais e registro das evidências finais de segurança e validação | Reconciliação `ad455ed`; implementação `d6164f3`; correção da fixture de junction `553f275` |
+| 2026-08-10 | Codex | Reconciliação da fronteira phase-scoped de AC-23 com a HERMES-0006: `run_skill` e `skill run` passam a ser permitidos somente no piloto fechado | Registry/discovery permanecem passivos; runner genérico, `execute_skill`, pipeline e execução dinâmica continuam proibidos |

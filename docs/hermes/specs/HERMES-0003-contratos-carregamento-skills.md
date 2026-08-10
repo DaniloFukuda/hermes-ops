@@ -121,7 +121,7 @@ test_function = "test_validation_is_deterministic"
 [[acceptance_criteria]]
 id = "AC-30"
 test_file = "tests/test_skills.py"
-test_function = "test_skills_api_has_no_runner_execution_pipeline_or_cli"
+test_function = "test_skills_api_has_no_generic_runner_execute_skill_or_pipeline"
 +++
 
 # HERMES-0003 — Contratos e Carregamento de Skills
@@ -690,10 +690,12 @@ sem fundi-las semanticamente com contrato inválido.
 - **AC-28**: A implementação usa somente a biblioteca padrão e não adiciona PyYAML nem outra dependência YAML.
 - **AC-29**: O mesmo arquivo, caminho e contrato v1 produzem deterministicamente o mesmo resultado ou o mesmo erro.
 - **AC-30**: Na fase HERMES-0003 não eram expostos registry, discovery,
-  runner, execução, pipelines ou CLI de skills. A HERMES-0004 supersede somente
-  a restrição limitada àquela fase contra registry e discovery; permanecem
-  invariantes a ausência de runner, `run_skill`, execução, pipeline e CLI
-  operacional de skills.
+  runner, execução, pipelines ou CLI de skills. HERMES-0004/0005/0006
+  supersedem somente essas ausências limitadas à fase por meio das APIs
+  explicitamente especificadas. `run_skill` e a CLI piloto `skill run` são
+  permitidos exclusivamente pelo contrato fechado da HERMES-0006; permanecem
+  proibidos runner genérico, `execute_skill`, pipeline e qualquer execução
+  genérica ou dinâmica de skills.
 
 ## Plano de Testes
 
@@ -732,7 +734,7 @@ deverá referenciar `Spec: HERMES-0003 / AC-NN` em docstring ou comentário.
 | AC-27 | Segurança | `tests/test_skills.py` | `test_declarations_do_not_grant_capabilities` | `requires` e `allows_write` não causam efeitos |
 | AC-28 | Estrutural | `tests/test_skills.py` | `test_no_external_yaml_dependency` | Nenhuma dependência ou import YAML externo |
 | AC-29 | Unitário | `tests/test_skills.py` | `test_validation_is_deterministic` | Repetições produzem resultado idêntico |
-| AC-30 | Estrutural | `tests/test_skills.py` | `test_skills_api_has_no_runner_execution_pipeline_or_cli` | Após a extensão da HERMES-0004, runner, execução, pipeline e CLI operacional continuam ausentes |
+| AC-30 | Estrutural | `tests/test_skills.py` | `test_skills_api_has_no_generic_runner_execute_skill_or_pipeline` | Extensões posteriores explícitas são permitidas; runner genérico, `execute_skill` e pipeline permanecem ausentes |
 
 Os testes de segurança abrangem comportamento permitido, comportamento
 bloqueado e regressão: carregamento do contrato real permitido; construções
@@ -830,3 +832,4 @@ os critérios de aceitação desta especificação.
 | 2026-08-09 | Codex | Promoção do status para Aprovado após auditoria final, com `justification` documental para os ACs sem testes implementados | Auditoria final concluída sem divergências materiais |
 | 2026-08-10 | Codex | Promoção do status para Implementado, substituição das justificativas temporárias por vínculos reais AC→teste e registro das evidências finais do SKILL-2 | Commit `ad462f0`; auditoria final e validações concluídas sem divergências |
 | 2026-08-10 | Codex | Reconciliação do AC-30 com a extensão posterior da HERMES-0004: registry e discovery deixam de ser proibição permanente; runner, execução, pipeline e CLI operacional permanecem fora do escopo | Supersessão limitada pela HERMES-0004; sem alteração do loader, parser ou modelo |
+| 2026-08-10 | Codex | Reconciliação controlada do AC-30 com a HERMES-0006: `run_skill` e a CLI piloto deixam de ser proibições absolutas, mantendo vedados runner genérico, `execute_skill`, pipeline e execução dinâmica | Supersessão limitada ao piloto read-only; loader, parser e modelo permanecem inalterados |

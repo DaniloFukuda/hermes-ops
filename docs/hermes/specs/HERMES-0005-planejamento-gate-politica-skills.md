@@ -129,7 +129,7 @@ test_function = "test_planning_integrates_with_real_skill_registry"
 [[acceptance_criteria]]
 id = "AC-32"
 test_file = "tests/test_skill_policy.py"
-test_function = "test_public_api_has_no_runner_execution_pipeline_or_cli"
+test_function = "test_public_api_has_no_generic_runner_execute_skill_or_pipeline"
 [[acceptance_criteria]]
 id = "AC-33"
 test_file = "tests/test_skill_policy.py"
@@ -668,8 +668,11 @@ Exemplos normativos de precedência:
 - **AC-30**: `plan_skills` não acessa filesystem, não faz discovery e não chama
   `load_skill`.
 - **AC-31**: Integração usa `SkillRegistry` real e consulta por `get_by_id`.
-- **AC-32**: API pública não introduz runner, execução, pipeline ou CLI
-  operacional de skills.
+- **AC-32**: A camada de policy/planning não executa skills e `plan_skills`
+  permanece puramente declarativo. A HERMES-0006 supersede somente a proibição
+  phase-scoped de uma API `run_skill` e da CLI piloto `skill run`; permanecem
+  proibidos runner genérico, `execute_skill`, pipeline e execução dinâmica, e
+  nenhum `SkillPlan` executa por si próprio.
 - **AC-33**: `SkillPolicy` rejeita tipos ou valores inválidos, incluindo
   coleções diferentes de `frozenset`, itens vazios, whitespace-only ou com
   whitespace externo, com `SKILL_POLICY_INVALID` e sem normalização.
@@ -738,7 +741,7 @@ exigir. Pelo menos um teste usa o `SkillRegistry` público real.
 | AC-29 | Segurança | `tests/test_skill_policy.py` | `test_requirements_are_not_imported_or_executed` | Requirement sentinela não aparece em módulos e imports perigosos falham se chamados |
 | AC-30 | Segurança observável | `tests/test_skill_policy.py` | `test_plan_skills_does_not_use_discovery_filesystem_or_loader` | `discover_skills`, `load_skill` e fronteiras de filesystem falham se chamados |
 | AC-31 | Integração | `tests/test_skill_policy.py` | `test_planning_integrates_with_real_skill_registry` | Registry público real |
-| AC-32 | API pública | `tests/test_skill_policy.py` | `test_public_api_has_no_runner_execution_pipeline_or_cli` | Exports e help público permanecem sem superfícies operacionais |
+| AC-32 | API pública | `tests/test_skill_policy.py` | `test_public_api_has_no_generic_runner_execute_skill_or_pipeline` | Planning permanece inerte apesar da fronteira piloto posterior; sem runner genérico, `execute_skill` ou pipeline |
 | AC-33 | Unitário parametrizado | `tests/test_skill_policy.py` | `test_invalid_skill_policy_values_are_rejected` | Tipos, coleções, vazio, whitespace-only e whitespace externo falham sem conversão |
 | AC-34 | Unitário parametrizado | `tests/test_skill_policy.py` | `test_invalid_registry_is_rejected` | Tuple, list, dict, `None` e objeto duck-typed produzem `SKILL_PLAN_INVALID` |
 | AC-35 | Unitário parametrizado | `tests/test_skill_policy.py` | `test_invalid_requested_ids_structure_is_rejected` | Coleção não tuple e item não string produzem `SKILL_PLAN_REQUEST_INVALID` |
@@ -853,3 +856,4 @@ inertes, sem mutação de `SkillRegistry` ou `SkillDefinition`.
 | 2026-08-10 | Codex | Fechamento da gramática de request, registry inválido, precedência observável, construção direta e provas de ausência de efeitos | Correção após auditoria da HERMES-0005 |
 | 2026-08-10 | Codex | Promoção para Aprovado e registro de justification documental temporária nos 43 ACs, antes da implementação e criação dos testes | Auditoria final concluída sem bloqueantes ou ambiguidades materiais |
 | 2026-08-10 | Codex | Promoção para Implementado, substituição das 43 justifications temporárias por vínculos reais de teste e registro das evidências finais | Implementação `738bc971fb3ed6802a5c5eb53958aa1f526f0216`; aprovação `44edb726b6db9d1b0fb4b823f13064c88c141f5b` |
+| 2026-08-10 | Codex | Reconciliação de AC-32 com a HERMES-0006: a fronteira posterior `run_skill`/`skill run` é permitida sem atribuir execução ao planning | `plan_skills` e `SkillPlan` permanecem declarativos; runner genérico, `execute_skill`, pipeline e execução dinâmica seguem proibidos |

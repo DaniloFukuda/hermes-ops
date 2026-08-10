@@ -415,10 +415,10 @@ def test_discovery_does_not_modify_git(tmp_path: Path) -> None:
     assert (repository / ".git" / "config").read_bytes() == config
 
 
-def test_public_api_has_no_runner_pipeline_or_cli(tmp_path: Path) -> None:
+def test_public_api_has_no_generic_runner_execute_skill_or_pipeline(tmp_path: Path) -> None:
     """Spec: HERMES-0004 / AC-23"""
     api = _registry_api()
-    forbidden = {"runner", "run_skill", "pipeline", "execute_skill"}
+    forbidden = {"runner", "pipeline", "execute_skill"}
     assert forbidden.isdisjoint(set(dir(api)))
     from hermes_ops.cli import build_parser
     assert "skills" not in build_parser().format_help().lower()

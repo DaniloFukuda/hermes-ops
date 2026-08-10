@@ -780,6 +780,14 @@ code `4` retornado por um Report também é preservado, embora a origem usual de
 - **AC-51**: Dogfooding end-to-end no layout real atravessa discovery, registry, policy, plan, dispatch, handler, resultado e formatter.
 - **AC-52**: Resultado semântico relevante do comando skill permanece compatível com preflight, doctor e worktree legados.
 
+A compatibilidade dos AC-38 a AC-40 preserva a semântica interna e passiva de
+loader, registry, discovery, policy e planning. Ela não preserva como proibição
+permanente as ausências próprias das fases anteriores: esta especificação
+supersede de forma limitada a vedação absoluta do símbolo público `run_skill` e
+da CLI operacional `skill run`, exclusivamente para o piloto read-only fechado
+aqui definido. Runner genérico, `execute_skill`, pipeline, plugins e execução
+dinâmica ou arbitrária continuam proibidos.
+
 ## Plano de Testes
 
 Todos os testes futuros ficam em `tests/test_skill_execution.py`, salvo as
@@ -957,3 +965,4 @@ As evidências pré-implementação já comprovadas são:
 |------|-------|-----------|------------|
 | 2026-08-10 | Codex | Criação do rascunho para execução piloto read-only e fechada de `git-preflight` | Dogfooding da única skill operacional concreta existente |
 | 2026-08-10 | Codex | Promoção para Aprovado após reauditoria final dos 52 critérios, sem bloqueantes | Discovery, planning, policy externa, imutabilidade profunda, exit codes e dogfooding especificados |
+| 2026-08-10 | Codex | Registro explícito da supersessão limitada das antigas ausências phase-scoped de `run_skill` e CLI de skills | Loader, registry, policy e planning permanecem compatíveis; somente o piloto read-only fechado é acrescentado |
