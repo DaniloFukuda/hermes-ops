@@ -89,4 +89,3 @@ class MissionEvidencePack:
     def __post_init__(self) -> None:
         if self.schema_version != 1 or self.target != "<PROJECT_ROOT>" or not self.mission:
             raise ValueError("invalid mission evidence pack")
-
