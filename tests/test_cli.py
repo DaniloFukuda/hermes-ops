@@ -376,3 +376,89 @@ def test_skill_run_has_no_catalog_override_option(
         )
     assert caught.value.code == 2
     assert "unrecognized arguments" in capsys.readouterr().err
+
+
+def test_skill_run_code_audit_text_contract(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Spec: HERMES-0008 / AC-31"""
+    target = _skill_cli_target(tmp_path)
+    (target / "risk.py").write_text("verify=False\n", encoding="utf-8")
+    code = main(["skill", "run", "code-audit", "--project", str(target), "--format", "text"])
+    output = capsys.readouterr().out
+    assert code == 3
+    for expected in (
+        "status=completed_with_findings", "[HIGH] CA003 observed", "file=risk.py",
+        "region=1:1-1:12", "evidence=verify=False", "observation=",
+        "justification=", "suggestion=", "exit_code=3",
+    ):
+        assert expected in output
+
+
+def test_skill_run_code_audit_json_contract(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Spec: HERMES-0008 / AC-32"""
+    target = _skill_cli_target(tmp_path)
+    (target / "risk.ts").write_text("eval(value);\n", encoding="utf-8")
+    code = main(["skill", "run", "code-audit", "--project", str(target), "--format", "json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert code == payload["exit_code"] == 3
+    assert payload["skill_id"] == "code-audit"
+    finding = payload["evidence"][1]["details"]
+    assert finding["rule_id"] == "CA001"
+    assert set(finding).issuperset({
+        "severity", "classification", "file", "region", "evidence",
+        "observation", "justification", "suggestion",
+    })
+
+
+@pytest.mark.parametrize("flag", ["--skills-root", "--include", "--exclude", "--rule", "--mission"])
+def test_code_audit_adds_no_public_operational_option(
+    flag: str,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Spec: HERMES-0008 / AC-33"""
+    target = _skill_cli_target(tmp_path)
+    with pytest.raises(SystemExit) as caught:
+        main(["skill", "run", "code-audit", "--project", str(target), flag, "value"])
+    assert caught.value.code == 2
+    assert "unrecognized arguments" in capsys.readouterr().err
+
+
+def test_code_audit_cli_never_exposes_absolute_or_unsafe_paths(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Spec: HERMES-0008 / AC-34"""
+    target = _skill_cli_target(tmp_path)
+    secret = "cli-secret-sentinel"
+    (target / "risk.py").write_text(f'api_token = "{secret}"\n', encoding="utf-8")
+    code = main(["skill", "run", "code-audit", "--project", str(target), "--format", "json"])
+    output = capsys.readouterr()
+    assert code == 3
+    assert str(target) not in output.out + output.err
+    assert secret not in output.out + output.err
+    assert "Traceback" not in output.out + output.err
+
+
+def test_code_audit_exit_status_distinguishes_clean_findings_and_failure(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Spec: HERMES-0008 / AC-35"""
+    clean = tmp_path / "clean"
+    clean.mkdir()
+    assert main(["skill", "run", "code-audit", "--project", str(clean)]) == 0
+    assert "status=passed" in capsys.readouterr().out
+
+    (clean / "risk.py").write_text("verify=False\n", encoding="utf-8")
+    assert main(["skill", "run", "code-audit", "--project", str(clean)]) == 3
+    assert "status=completed_with_findings" in capsys.readouterr().out
+
+    missing = tmp_path / "missing"
+    assert main(["skill", "run", "code-audit", "--project", str(missing)]) == 3
+    assert "ERRO SKILL_TARGET_INVALID" in capsys.readouterr().err

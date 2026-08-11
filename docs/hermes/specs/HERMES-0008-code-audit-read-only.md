@@ -1,7 +1,7 @@
 +++
 id = "HERMES-0008"
 title = "Code audit read-only com evidências"
-status = "Rascunho"
+status = "Implementado"
 owners = ["Danilo"]
 created = "2026-08-11"
 updated = "2026-08-11"
@@ -14,7 +14,7 @@ test = "tests/test_code_audit.py::test_code_audit_manifest_is_passive_read_only_
 
 [[acceptance_criteria]]
 id = "AC-02"
-test = "tests/test_skill_execution.py::test_code_audit_is_dispatched_only_by_its_exact_identifier"
+test = "tests/test_code_audit.py::test_code_audit_is_dispatched_only_by_its_exact_identifier"
 
 [[acceptance_criteria]]
 id = "AC-03"
@@ -150,15 +150,15 @@ test = "tests/test_cli.py::test_code_audit_exit_status_distinguishes_clean_findi
 
 [[acceptance_criteria]]
 id = "AC-36"
-test = "tests/test_skill_execution.py::test_code_audit_ignores_target_skills_and_preserves_exact_lookup"
+test = "tests/test_code_audit.py::test_code_audit_ignores_target_skills_and_preserves_exact_lookup"
 
 [[acceptance_criteria]]
 id = "AC-37"
-test = "tests/test_skill_execution.py::test_git_preflight_contract_is_unchanged_after_code_audit"
+test = "tests/test_code_audit.py::test_git_preflight_contract_is_unchanged_after_code_audit"
 
 [[acceptance_criteria]]
 id = "AC-38"
-test = "tests/test_skill_execution.py::test_code_audit_rejects_linked_worktree_without_mutation"
+test = "tests/test_code_audit.py::test_code_audit_rejects_linked_worktree_without_mutation"
 
 [[acceptance_criteria]]
 id = "AC-39"
@@ -174,14 +174,14 @@ test = "tests/test_skill_catalog.py::test_installed_catalog_resolution_does_not_
 
 [[acceptance_criteria]]
 id = "AC-42"
-test = "tests/test_code_audit_dogfood.py::test_code_audit_external_lucre_agro_clone_read_only"
+justification = "Aceitação real executada externamente após a suíte; o teste automatizado portátil não pode depender de um clone de consumidor."
 +++
 
 # HERMES-0008 - Code audit read-only com evidências
 
 ## Status
 
-Rascunho para revisão. Esta especificação ainda não autoriza implementação.
+Implementado e validado em 2026-08-11.
 
 ## Resumo para o Responsável
 
@@ -1413,11 +1413,69 @@ O status somente poderá mudar de `Rascunho` para `Implementado` quando houver:
 13. confirmação de que nenhuma limpeza ou alteração foi feita no clone;
 14. confirmação de que `git-preflight` permaneceu compatível.
 
-Nesta fase não há evidência de implementação porque nenhum código foi
-autorizado ou alterado.
+As evidências concretas desta implementação estão registradas na seção 23.
 
-## 23. Histórico
+## 23. Evidências da Implementação
+
+### Implementação e testes
+
+| Verificação | Evidência |
+|---|---|
+| Testes direcionados finais | 86 passed, 3 skipped, 0 failed |
+| Suíte completa final | 452 collected; 441 passed, 11 skipped, 0 failed |
+| `compileall` | exit code 0 |
+| Build wheel e sdist | exit code 0; ambos os artefatos construídos |
+| Packaging isolado | wheel instalado e `code-audit` executada fora da árvore fonte; wheel reconstruído do sdist |
+| Catálogo instalado | `code-audit` e `git-preflight` presentes e resolvidos sem âncora exclusiva em uma skill |
+| Regressão `git-preflight` | suíte completa passando |
+
+Os skips foram ambientais ou deliberados: criação de symlinks sem privilégio
+no Windows, fixtures portáteis de permission-denied indisponíveis e o teste
+externo antigo da HERMES-0007 reservado para execução explícita. Junctions e o
+linked worktree aplicáveis foram exercitados.
+
+### Dogfooding real da Lucre Agro
+
+Alvo:
+
+```text
+C:\Users\Danilo\Projeto\lucreagro-hermes-clone
+```
+
+O alvo não continha `skills/`. Resultado:
+
+```text
+status=completed_with_findings
+exit_code=3
+scanned_directories=11
+scanned_files=95
+scanned_bytes=1308117
+findings=14
+```
+
+Todos os 14 achados foram `CA004/high/hypothesis`. A revisão humana confirmou
+que o relatório não declarou nenhum deles como fato: quatro evidências usam
+nomes explícitos `FAKE_TOKEN`/`FAKE_APP_SECRET`, oito apontam para paths de
+credenciais em testes, uma aponta para `private_token` em teste de logging e
+uma para `APP_SECRET` em teste de assinatura. Não houve achado `observed` nem
+risco real confirmado pelas cinco regras. Os achados relacionados ao fluxo de
+WhatsApp permanecem hipóteses de fixtures de teste, corretamente redigidas,
+para revisão do responsável.
+
+Estado Git externo:
+
+| Estado | Antes | Depois | Preservado |
+|---|---|---|---|
+| HEAD | `2d1402764b379bf742c78819eff122cc657d86c5` | `2d1402764b379bf742c78819eff122cc657d86c5` | sim |
+| working tree | vazia; SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | idêntica | sim |
+| staging | vazio; SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | idêntico | sim |
+| refs | 40; SHA-256 `fbcb522489a8c38e233bce51ef3a4d5955346d172a973e115b50d2d865d17620` | 40; mesmo SHA-256 | sim |
+
+O clone não foi limpo, preparado ou modificado para o teste.
+
+## 24. Histórico
 
 | Data | Mudança |
 |---|---|
 | 2026-08-11 | Rascunho inicial da HERMES-0008 para revisão antes de implementação. |
+| 2026-08-11 | Implementação concluída; 42 ACs validados por testes automatizados ou dogfooding real, packaging e snapshots Git preservados. |

@@ -13,7 +13,7 @@ from hermes_ops.core.errors import SkillCatalogError
 
 _DISTRIBUTION_NAME = "hermes-ops"
 _CATALOG_PARTS = ("hermes_ops_skill_catalog", "skills")
-_ANCHOR_PARTS = (*_CATALOG_PARTS, "git-preflight", "SKILL.md")
+_CATALOG_MARKER_PARTS = _CATALOG_PARTS
 
 
 def _fail(code: str, message: str) -> None:
@@ -102,20 +102,30 @@ def resolve_own_skill_catalog() -> Path:
             "The installed Hermes distribution does not record a skill catalog",
         )
 
-    anchors = tuple(
-        entry
+    catalog_entries = tuple(
+        (entry, PurePosixPath(str(entry).replace("\\", "/")).parts)
         for entry in files
-        if PurePosixPath(str(entry).replace("\\", "/")).parts[-4:]
-        == _ANCHOR_PARTS
+        if _CATALOG_MARKER_PARTS
+        == PurePosixPath(str(entry).replace("\\", "/")).parts[-4:-2]
+        and PurePosixPath(str(entry).replace("\\", "/")).parts[-1:] == ("SKILL.md",)
     )
-    if len(anchors) != 1:
+    roots = {
+        parts[:-4]
+        for _, parts in catalog_entries
+    }
+    recorded_paths = tuple(str(entry) for entry, _ in catalog_entries)
+    if (
+        not catalog_entries
+        or len(roots) != 1
+        or len(set(recorded_paths)) != len(recorded_paths)
+    ):
         _fail(
-            "SKILL_CATALOG_NOT_FOUND" if not anchors else "SKILL_CATALOG_INVALID",
+            "SKILL_CATALOG_NOT_FOUND" if not catalog_entries else "SKILL_CATALOG_INVALID",
             "The installed Hermes distribution must contain exactly one skill catalog",
         )
 
     try:
-        anchor = Path(distribution.locate_file(anchors[0]))
+        anchor = Path(distribution.locate_file(catalog_entries[0][0]))
         catalog_root = anchor.parents[2]
         anchor_is_file = anchor.is_file()
         catalog_is_directory = catalog_root.is_dir()

@@ -188,6 +188,23 @@ def test_wheel_installs_and_runs_all_commands_in_isolation(
     assert payload["status"] == "passed"
     assert not (project / "skills").exists()
 
+    (project / "source.py").write_text("def safe(value):\n    return value\n", encoding="utf-8")
+    audit = subprocess.run(
+        (
+            str(python), "-m", "hermes_ops", "skill", "run", "code-audit",
+            "--project", str(project), "--format", "json",
+        ),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert audit.returncode == 0, audit.stdout + audit.stderr
+    audit_payload = json.loads(audit.stdout)
+    assert audit_payload["skill_id"] == "code-audit"
+    assert audit_payload["status"] == "passed"
+    assert not (project / "skills").exists()
+
 
 def test_wheel_and_sdist_include_own_skill_catalog(
     built_artifacts: dict[str, Path],
@@ -215,3 +232,55 @@ def test_wheel_and_sdist_include_own_skill_catalog(
         extracted = archive.extractfile(sdist_matches[0])
         assert extracted is not None
         assert extracted.read() == canonical
+
+
+def test_wheel_contains_complete_canonical_code_audit_skill(
+    built_artifacts: dict[str, Path],
+) -> None:
+    """Spec: HERMES-0008 / AC-39"""
+    canonical = (Path(__file__).resolve().parents[1] / "skills/code-audit/SKILL.md").read_bytes()
+    suffix = "hermes_ops_skill_catalog/skills/code-audit/SKILL.md"
+    with zipfile.ZipFile(built_artifacts["wheel"]) as archive:
+        matches = [name for name in archive.namelist() if name.endswith(suffix)]
+        assert len(matches) == 1
+        assert archive.read(matches[0]) == canonical
+
+
+def test_sdist_contains_complete_canonical_code_audit_skill(
+    built_artifacts: dict[str, Path],
+    tmp_path: Path,
+) -> None:
+    """Spec: HERMES-0008 / AC-40"""
+    canonical = (Path(__file__).resolve().parents[1] / "skills/code-audit/SKILL.md").read_bytes()
+    with tarfile.open(built_artifacts["sdist"], "r:gz") as archive:
+        matches = [
+            member for member in archive.getmembers()
+            if member.name.endswith("/skills/code-audit/SKILL.md")
+        ]
+        assert len(matches) == 1
+        extracted = archive.extractfile(matches[0])
+        assert extracted is not None
+        assert extracted.read() == canonical
+
+    rebuilt = tmp_path / "rebuilt"
+    completed = subprocess.run(
+        (
+            sys.executable, "-m", "pip", "wheel", "--no-deps",
+            "--no-build-isolation", "--wheel-dir", str(rebuilt),
+            str(built_artifacts["sdist"]),
+        ),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    rebuilt_wheel = next(rebuilt.glob("*.whl"))
+    with zipfile.ZipFile(rebuilt_wheel) as archive:
+        matches = [
+            name for name in archive.namelist()
+            if name.endswith("hermes_ops_skill_catalog/skills/code-audit/SKILL.md")
+        ]
+        assert len(matches) == 1
+        assert archive.read(matches[0]) == canonical

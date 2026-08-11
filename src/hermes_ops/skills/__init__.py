@@ -9,6 +9,13 @@ from hermes_ops.skills.execution_models import (
     SkillExecutionResult,
     SkillExecutionStatus,
 )
+from hermes_ops.skills.code_audit import (
+    CodeAuditClassification,
+    CodeAuditFinding,
+    CodeAuditRegion,
+    CodeAuditSeverity,
+    CodeAuditSummary,
+)
 from hermes_ops.skills.executor import run_skill
 from hermes_ops.skills.loader import load_skill
 from hermes_ops.skills.models import SkillDefinition, SkillRisk, SkillStatus
@@ -18,6 +25,11 @@ from hermes_ops.skills.registry import SkillRegistry, discover_skills
 
 __all__ = (
     "SkillContractError",
+    "CodeAuditClassification",
+    "CodeAuditFinding",
+    "CodeAuditRegion",
+    "CodeAuditSeverity",
+    "CodeAuditSummary",
     "SkillDefinition",
     "SkillExecutionError",
     "SkillExecutionEvidence",

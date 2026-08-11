@@ -69,7 +69,7 @@ def test_catalog_is_discovered_with_existing_strict_contract() -> None:
     registry = discover_skills(resolve_own_skill_catalog())
     skill = registry.get_by_id("git-preflight")
     assert skill is not None
-    assert tuple(item.id for item in registry.skills) == ("git-preflight",)
+    assert tuple(item.id for item in registry.skills) == ("code-audit", "git-preflight")
     assert skill.requires == ("git",)
     assert skill.allows_write is False
 
@@ -123,3 +123,22 @@ def test_packaged_catalog_contains_exact_git_preflight_contract() -> None:
     resolved = resolve_own_skill_catalog() / "skills/git-preflight/SKILL.md"
     assert resolved.samefile(canonical)
     assert resolved.read_bytes() == canonical.read_bytes()
+
+
+def test_installed_catalog_resolution_does_not_depend_on_one_skill_anchor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Spec: HERMES-0008 / AC-41"""
+    prefix = PurePosixPath("../../../hermes_ops_skill_catalog/skills")
+    entries = (
+        prefix / "code-audit/SKILL.md",
+        prefix / "git-preflight/SKILL.md",
+    )
+    installed = tmp_path / "hermes_ops_skill_catalog/skills/code-audit/SKILL.md"
+    installed.parent.mkdir(parents=True)
+    installed.write_text("anchor", encoding="utf-8")
+    fixture = _DistributionFixture(files=entries, located=installed)
+    monkeypatch.setattr(metadata, "distribution", lambda name: fixture)
+
+    assert resolve_own_skill_catalog() == tmp_path / "hermes_ops_skill_catalog"

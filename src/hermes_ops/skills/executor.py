@@ -8,6 +8,7 @@ from hermes_ops.core.errors import PathResolutionError, SkillExecutionError
 from hermes_ops.core.paths import resolve_directory
 from hermes_ops.core.results import Report
 from hermes_ops.skills.catalog import resolve_own_skill_catalog
+from hermes_ops.skills.code_audit import run_code_audit, validate_code_audit_target
 from hermes_ops.skills.execution_models import (
     SkillExecutionEvidence,
     SkillExecutionResult,
@@ -50,11 +51,17 @@ def _run_git_preflight(target_project: str | Path) -> SkillExecutionResult:
     return _build_execution_result("git-preflight", report)
 
 
-def _dispatch_skill(plan: SkillPlan, target_project: str | Path) -> SkillExecutionResult:
+def _dispatch_skill(
+    plan: SkillPlan,
+    target_project: str | Path,
+    original_target: Any | None = None,
+) -> SkillExecutionResult:
     if type(plan) is not SkillPlan or len(plan.skills) != 1:
         _invalid("Execution requires an approved unitary SkillPlan")
     if plan.skills[0].id == "git-preflight":
         return _run_git_preflight(target_project)
+    if plan.skills[0].id == "code-audit":
+        return run_code_audit(target_project if original_target is None else original_target)
     raise SkillExecutionError(
         "SKILL_EXECUTION_NOT_SUPPORTED",
         f"Skill '{plan.skills[0].id}' has no execution handler",
@@ -76,9 +83,11 @@ def _run_skill_with_catalog(
             "SKILL_TARGET_INVALID",
             "The explicit target project is not a valid directory",
         ) from exc
+    if skill_id == "code-audit":
+        validate_code_audit_target(project_root)
     registry = discover_skills(catalog_root)
     plan = plan_skills(registry, (skill_id,), policy)
-    return _dispatch_skill(plan, target_project)
+    return _dispatch_skill(plan, target_project, project_root)
 
 
 def run_skill(
@@ -95,5 +104,7 @@ def run_skill(
             "SKILL_TARGET_INVALID",
             "The explicit target project is not a valid directory",
         ) from exc
+    if skill_id == "code-audit":
+        validate_code_audit_target(project_root)
     catalog_root = resolve_own_skill_catalog()
-    return _run_skill_with_catalog(target_project, skill_id, policy, catalog_root)
+    return _run_skill_with_catalog(project_root, skill_id, policy, catalog_root)
