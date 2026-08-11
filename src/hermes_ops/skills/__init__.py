@@ -8,6 +8,7 @@ from hermes_ops.skills.execution_models import (
     SkillExecutionEvidence,
     SkillExecutionResult,
     SkillExecutionStatus,
+    SkillRunInputs,
 )
 from hermes_ops.skills.code_audit import (
     CodeAuditClassification,
@@ -35,6 +36,7 @@ __all__ = (
     "SkillExecutionEvidence",
     "SkillExecutionResult",
     "SkillExecutionStatus",
+    "SkillRunInputs",
     "SkillPlan",
     "SkillPolicy",
     "SkillPolicyError",

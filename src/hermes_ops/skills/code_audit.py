@@ -15,6 +15,7 @@ from hermes_ops.skills.execution_models import (
     SkillExecutionResult,
     SkillExecutionStatus,
 )
+from hermes_ops.skills.controlled_reader import read_source_documents
 
 
 ALLOWED_EXTENSIONS = frozenset(
@@ -583,16 +584,14 @@ def _summary(directories: int, files: int, bytes_read: int, findings: tuple[Code
 
 
 def run_code_audit(target_project: Any) -> SkillExecutionResult:
-    root = validate_code_audit_target(target_project)
-    candidates, directories = _inventory(root)
+    inventory = read_source_documents(target_project, max_depth=MAX_DEPTH, max_directories=MAX_DIRECTORIES, max_files=MAX_FILES, max_file_bytes=MAX_FILE_BYTES, max_total_bytes=MAX_TOTAL_BYTES)
     findings: list[CodeAuditFinding] = []
     bytes_read = 0
-    for candidate in candidates:
-        text, size = _read_candidate(candidate)
-        bytes_read += size
+    for document in inventory.documents:
+        bytes_read += document.bytes_read
         if bytes_read > MAX_TOTAL_BYTES:
             _fail("CODE_AUDIT_TOTAL_SIZE_EXCEEDED", "Code audit total size limit exceeded")
-        findings.extend(_analyze_file(candidate.relative, text))
+        findings.extend(_analyze_file(document.path, document.text))
         if len(findings) > MAX_FINDINGS:
             _fail("CODE_AUDIT_FINDING_LIMIT_EXCEEDED", "Code audit finding limit exceeded")
     ordered = tuple(sorted(
@@ -601,7 +600,7 @@ def run_code_audit(target_project: Any) -> SkillExecutionResult:
             item.file, item.region.start_line, item.region.start_column or 0, item.rule_id
         ),
     ))
-    summary = _summary(directories, len(candidates), bytes_read, ordered)
+    summary = _summary(inventory.directories, len(inventory.documents), bytes_read, ordered)
     evidence = [SkillExecutionEvidence(
         "code_audit_summary", Status.OK, "Code audit scan completed.", summary, "ok"
     )]

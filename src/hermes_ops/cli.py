@@ -44,6 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     skill_run = skill_commands.add_parser("run")
     skill_run.add_argument("skill_id")
     skill_run.add_argument("--project", required=True, help="Target project path to inspect")
+    skill_run.add_argument("--mission", help="Directed audit mission (mission-audit only)")
     skill_run.add_argument(
         "--format",
         choices=("text", "json"),
@@ -110,7 +111,7 @@ def _dispatch(command: str, project: str) -> Report:
 
 def _run_skill_cli(args: argparse.Namespace, sanitizer: PublicSanitizer) -> int:
     try:
-        result = run_skill_command(args.project, args.skill_id)
+        result = run_skill_command(args.project, args.skill_id, args.mission)
     except (
         SkillCatalogError,
         SkillContractError,
@@ -118,7 +119,7 @@ def _run_skill_cli(args: argparse.Namespace, sanitizer: PublicSanitizer) -> int:
         SkillPolicyError,
         SkillExecutionError,
     ) as exc:
-        exit_code = 2 if getattr(exc, "code", "") == "SKILL_EXECUTION_INVALID" else 3
+        exit_code = 2 if getattr(exc, "code", "") in {"SKILL_EXECUTION_INVALID", "MISSION_TERM_LIMIT_EXCEEDED"} else 3
         payload = {
             "skill_id": args.skill_id,
             "exit_code": exit_code,

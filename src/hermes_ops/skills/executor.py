@@ -13,7 +13,9 @@ from hermes_ops.skills.execution_models import (
     SkillExecutionEvidence,
     SkillExecutionResult,
     SkillExecutionStatus,
+    SkillRunInputs,
 )
+from hermes_ops.skills.mission_audit import run_mission_audit
 from hermes_ops.skills.policy import SkillPlan, SkillPolicy, plan_skills
 from hermes_ops.skills.registry import discover_skills
 
@@ -55,6 +57,7 @@ def _dispatch_skill(
     plan: SkillPlan,
     target_project: str | Path,
     original_target: Any | None = None,
+    inputs: SkillRunInputs = SkillRunInputs(),
 ) -> SkillExecutionResult:
     if type(plan) is not SkillPlan or len(plan.skills) != 1:
         _invalid("Execution requires an approved unitary SkillPlan")
@@ -62,6 +65,8 @@ def _dispatch_skill(
         return _run_git_preflight(target_project)
     if plan.skills[0].id == "code-audit":
         return run_code_audit(target_project if original_target is None else original_target)
+    if plan.skills[0].id == "mission-audit":
+        return run_mission_audit(target_project if original_target is None else original_target, inputs.mission)
     raise SkillExecutionError(
         "SKILL_EXECUTION_NOT_SUPPORTED",
         f"Skill '{plan.skills[0].id}' has no execution handler",
@@ -73,6 +78,7 @@ def _run_skill_with_catalog(
     skill_id: Any,
     policy: Any,
     catalog_root: Path,
+    inputs: SkillRunInputs = SkillRunInputs(),
 ) -> SkillExecutionResult:
     if project_root is None or type(skill_id) is not str or type(policy) is not SkillPolicy:
         _invalid("Execution requires an explicit project root, skill id, and SkillPolicy")
@@ -83,17 +89,23 @@ def _run_skill_with_catalog(
             "SKILL_TARGET_INVALID",
             "The explicit target project is not a valid directory",
         ) from exc
-    if skill_id == "code-audit":
+    if skill_id in {"code-audit", "mission-audit"}:
         validate_code_audit_target(project_root)
+    if skill_id == "mission-audit" and inputs.mission is None:
+        _invalid("mission-audit requires --mission")
+    if skill_id != "mission-audit" and inputs.mission is not None:
+        _invalid("--mission is only valid for mission-audit")
     registry = discover_skills(catalog_root)
     plan = plan_skills(registry, (skill_id,), policy)
-    return _dispatch_skill(plan, target_project, project_root)
+    return _dispatch_skill(plan, target_project, project_root, inputs)
 
 
 def run_skill(
     project_root: Any,
     skill_id: Any,
     policy: Any,
+    *,
+    inputs: SkillRunInputs = SkillRunInputs(),
 ) -> SkillExecutionResult:
     if project_root is None or type(skill_id) is not str or type(policy) is not SkillPolicy:
         _invalid("Execution requires an explicit project root, skill id, and SkillPolicy")
@@ -104,7 +116,9 @@ def run_skill(
             "SKILL_TARGET_INVALID",
             "The explicit target project is not a valid directory",
         ) from exc
-    if skill_id == "code-audit":
+    if type(inputs) is not SkillRunInputs:
+        _invalid("Execution inputs must be SkillRunInputs")
+    if skill_id in {"code-audit", "mission-audit"}:
         validate_code_audit_target(project_root)
     catalog_root = resolve_own_skill_catalog()
-    return _run_skill_with_catalog(project_root, skill_id, policy, catalog_root)
+    return _run_skill_with_catalog(project_root, skill_id, policy, catalog_root, inputs)

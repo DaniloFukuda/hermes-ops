@@ -284,3 +284,19 @@ def test_sdist_contains_complete_canonical_code_audit_skill(
         ]
         assert len(matches) == 1
         assert archive.read(matches[0]) == canonical
+
+
+def test_wheel_and_sdist_contain_canonical_mission_audit_skill(
+    built_artifacts: dict[str, Path],
+) -> None:
+    """Spec: HERMES-0009 / AC-44"""
+    canonical = (Path(__file__).resolve().parents[1] / "skills/mission-audit/SKILL.md").read_bytes()
+    suffix = "hermes_ops_skill_catalog/skills/mission-audit/SKILL.md"
+    with zipfile.ZipFile(built_artifacts["wheel"]) as archive:
+        matches = [name for name in archive.namelist() if name.endswith(suffix)]
+        assert len(matches) == 1 and archive.read(matches[0]) == canonical
+    with tarfile.open(built_artifacts["sdist"], "r:gz") as archive:
+        matches = [member for member in archive.getmembers() if member.name.endswith("/skills/mission-audit/SKILL.md")]
+        assert len(matches) == 1
+        extracted = archive.extractfile(matches[0])
+        assert extracted is not None and extracted.read() == canonical

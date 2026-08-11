@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 from hermes_ops.core.presentation import PublicSanitizer
-from hermes_ops.skills import SkillExecutionResult, SkillPolicy, SkillRisk, run_skill
+from hermes_ops.skills import SkillExecutionResult, SkillPolicy, SkillRisk, SkillRunInputs, run_skill
 
 
 PILOT_POLICY = SkillPolicy(
@@ -16,7 +16,7 @@ PILOT_POLICY = SkillPolicy(
 
 def _structured_details(value: Any) -> Any:
     if isinstance(value, tuple):
-        if all(
+        if value and all(
             isinstance(item, tuple)
             and len(item) == 2
             and isinstance(item[0], str)
@@ -27,8 +27,8 @@ def _structured_details(value: Any) -> Any:
     return value
 
 
-def run_skill_command(target_project: str, skill_id: str) -> SkillExecutionResult:
-    return run_skill(target_project, skill_id, PILOT_POLICY)
+def run_skill_command(target_project: str, skill_id: str, mission: str | None = None) -> SkillExecutionResult:
+    return run_skill(target_project, skill_id, PILOT_POLICY, inputs=SkillRunInputs(mission))
 
 
 def skill_result_payload(
@@ -46,7 +46,7 @@ def skill_result_payload(
                 "message": item.message,
                 "details": (
                     _structured_details(item.details)
-                    if result.skill_id == "code-audit"
+                    if result.skill_id in {"code-audit", "mission-audit"}
                     else item.details
                 ),
                 "code": item.code,
@@ -69,11 +69,26 @@ def skill_result_json(result: SkillExecutionResult, sanitizer: PublicSanitizer) 
 def skill_result_text(result: SkillExecutionResult, sanitizer: PublicSanitizer) -> str:
     if result.skill_id == "code-audit":
         return _code_audit_result_text(result, sanitizer)
+    if result.skill_id == "mission-audit":
+        return _mission_audit_result_text(result, sanitizer)
     lines = [f"skill_id={result.skill_id}", f"status={result.status.value}"]
     lines.extend(
         f"{item.status.value:<9} {item.name}: {sanitizer.sanitize_text(item.message)}"
         for item in result.evidence
     )
+    lines.append(f"exit_code={result.exit_code}")
+    return "\n".join(lines)
+
+
+def _mission_audit_result_text(result: SkillExecutionResult, sanitizer: PublicSanitizer) -> str:
+    pack = _structured_details(result.evidence[0].details)
+    lines = [f"skill_id={result.skill_id}", f"status={result.status.value}"]
+    if isinstance(pack, dict):
+        completeness = pack.get("completeness", {})
+        lines.extend((f"mission={sanitizer.sanitize_text(str(pack.get('mission', '')))}", f"target={pack.get('target')}", f"completeness={completeness.get('status') if isinstance(completeness, dict) else 'unknown'}"))
+        for item in pack.get("files", []):
+            if isinstance(item, dict): lines.append(f"file={sanitizer.sanitize_text(str(item.get('path')))} score={item.get('score')}")
+        lines.append("note=Evidence identifies traceable locations; it does not assert defects or correctness.")
     lines.append(f"exit_code={result.exit_code}")
     return "\n".join(lines)
 

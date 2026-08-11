@@ -51,6 +51,16 @@ def _freeze(value: Any) -> FrozenValue:
 class SkillExecutionStatus(str, Enum):
     PASSED = "passed"
     COMPLETED_WITH_FINDINGS = "completed_with_findings"
+    COMPLETED_WITH_INSUFFICIENT_EVIDENCE = "completed_with_insufficient_evidence"
+
+
+@dataclass(frozen=True, slots=True)
+class SkillRunInputs:
+    mission: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.mission is not None and type(self.mission) is not str:
+            _invalid("Mission input must be a string")
 
 
 @dataclass(frozen=True, slots=True)

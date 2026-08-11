@@ -415,7 +415,7 @@ def test_skill_run_code_audit_json_contract(
     })
 
 
-@pytest.mark.parametrize("flag", ["--skills-root", "--include", "--exclude", "--rule", "--mission"])
+@pytest.mark.parametrize("flag", ["--skills-root", "--include", "--exclude", "--rule"])
 def test_code_audit_adds_no_public_operational_option(
     flag: str,
     tmp_path: Path,
