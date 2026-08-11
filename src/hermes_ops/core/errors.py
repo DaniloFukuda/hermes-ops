@@ -45,6 +45,14 @@ class SkillRegistryError(HermesOpsError):
         self.code = code
 
 
+class SkillCatalogError(HermesOpsError):
+    """The catalog owned by the installed Hermes distribution is unavailable."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
 class SkillPolicyError(HermesOpsError):
     """Skill planning cannot produce a plan under the supplied policy."""
 

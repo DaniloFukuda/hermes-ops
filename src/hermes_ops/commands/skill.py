@@ -14,8 +14,8 @@ PILOT_POLICY = SkillPolicy(
 )
 
 
-def run_skill_command(project: str, skill_id: str) -> SkillExecutionResult:
-    return run_skill(project, skill_id, PILOT_POLICY)
+def run_skill_command(target_project: str, skill_id: str) -> SkillExecutionResult:
+    return run_skill(target_project, skill_id, PILOT_POLICY)
 
 
 def skill_result_payload(

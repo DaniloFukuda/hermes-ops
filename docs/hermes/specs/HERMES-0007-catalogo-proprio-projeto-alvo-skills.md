@@ -1,7 +1,7 @@
 +++
 schema_version = 1
 id = "HERMES-0007"
-status = "Rascunho"
+status = "Implementado"
 [[acceptance_criteria]]
 id = "AC-01"
 test_file = "tests/test_skill_execution.py"
@@ -108,7 +108,7 @@ test_function = "test_skill_run_has_no_catalog_override_option"
 
 ## Status
 
-Rascunho
+Implementado
 
 ## Resumo para o Responsável pelo Projeto
 
@@ -755,11 +755,82 @@ comportamento público definidos aqui.
 
 ## Evidências da Implementação
 
-Não aplicável nesta fase — status `Rascunho`; esta tarefa cria somente a
-especificação e não implementa nem valida comportamento de produção.
+A implementação separa o catálogo instalado do projeto-alvo, preserva as
+fronteiras das HERMES-0004/0005/0006 e foi validada tanto no checkout editável
+quanto em wheel instalado isoladamente. O usuário proibiu commit nesta tarefa;
+por isso o estado validado é o diff local ainda não commitado.
+
+| Campo | Valor |
+|-------|-------|
+| Commit | Não aplicável — o usuário determinou explicitamente que a implementação não fosse commitada |
+| Estado da integração | Implementação local concluída e não commitada |
+| Arquivos alterados | `MANIFEST.in`, `pyproject.toml`, `src/hermes_ops/cli.py`, `src/hermes_ops/commands/skill.py`, `src/hermes_ops/core/errors.py`, `src/hermes_ops/skills/catalog.py`, `src/hermes_ops/skills/executor.py`, `tests/test_skill_catalog.py`, `tests/test_skill_execution.py`, `tests/test_skill_registry.py`, `tests/test_cli.py`, `tests/test_packaging.py` e esta especificação |
+| Testes direcionados | Matriz HERMES-0004/0005/0006/0007 → 205 passed, 7 skipped; repetição final dos módulos afetados após endurecimento de erros de catálogo → 97 passed, 1 skipped; 0 failed, 0 errors |
+| Suíte completa | `.venv\Scripts\python.exe -m pytest -q` → 398 passed, 9 skipped, 0 failed, 0 errors |
+| Validação de sintaxe ou compileall | `.venv\Scripts\python.exe -m compileall -q src` → PASS, exit code 0 |
+| Empacotamento | `.venv\Scripts\python.exe -m build` → wheel e sdist construídos; `tests/test_packaging.py` → 4 passed, incluindo instalação isolada e catálogo idêntico |
+| git diff --check | PASS, sem avisos |
+| Plataformas e versões validadas | Windows 10, Python 3.13.13 |
+| CI | Não aplicável — validação local solicitada; nenhuma operação remota foi autorizada |
+| Limitações do ambiente | 8 skips portáteis relacionados a symlinks/permissão no Windows e 1 skip intencional do teste automatizado opt-in de dogfooding; a aceitação externa correspondente foi executada concretamente após a suíte |
+| Auditoria final | PASS, 25 critérios vinculados às funções declaradas no front matter |
+
+### Empacotamento Comprovado
+
+- a fonte canônica permanece `skills/git-preflight/SKILL.md`;
+- sdist contém exatamente essa fonte sob `skills/`;
+- wheel contém uma única cópia em
+  `hermes_ops_skill_catalog/skills/git-preflight/SKILL.md` como data-file;
+- a instalação normal resolve o catálogo pelo arquivo registrado no manifesto
+  da distribuição;
+- a instalação editável resolve exclusivamente a raiz local declarada em
+  `direct_url.json`, nunca CWD, TARGET, ancestrais, siblings, home ou PATH;
+- o wheel instalado em venv isolado executou `git-preflight` contra um alvo sem
+  `skills/` com `status=passed`.
+
+### Dogfooding Externo Real
+
+Projeto-alvo:
+
+```text
+C:\Users\Danilo\Projeto\lucreagro-hermes-clone
+```
+
+O clone não continha `skills/` e não foi alterado ou limpo para a execução. O
+comando executado com o interpretador local foi:
+
+```text
+.venv\Scripts\python.exe -m hermes_ops skill run git-preflight \
+    --project "C:\Users\Danilo\Projeto\lucreagro-hermes-clone" \
+    --format text
+```
+
+Resultado:
+
+```text
+skill_id=git-preflight
+status=passed
+exit_code=0
+process_exit_code=0
+```
+
+Snapshot antes e depois:
+
+| Estado | Antes | Depois | Preservado |
+|--------|-------|--------|------------|
+| HEAD | `2d1402764b379bf742c78819eff122cc657d86c5` | `2d1402764b379bf742c78819eff122cc657d86c5` | Sim |
+| Working tree (`status --porcelain=v1`) | vazia | vazia | Sim |
+| Staging (`diff --cached --name-status`) | vazio | vazio | Sim |
+| Refs (`show-ref`) | 40 refs, SHA-256 `fbcb522489a8c38e233bce51ef3a4d5955346d172a973e115b50d2d865d17620` | 40 refs, mesmo SHA-256 | Sim |
+
+As capturas externas usaram somente consultas Git read-only, com locks
+opcionais, configurações global/sistema, fsmonitor, prompts e redirecionamentos
+`GIT_*` neutralizados.
 
 ## Histórico de Alterações
 
 | Data | Autor | Alteração | Referência |
 |------|-------|-----------|------------|
 | 2026-08-11 | Codex | Criação inicial da HERMES-0007 em status Rascunho, separando catálogo próprio e projeto-alvo sem nova flag pública | Dogfooding real contra Hermes e clone independente da Lucre Agro |
+| 2026-08-11 | Codex | Implementação do catálogo próprio ancorado na distribuição, separação do TARGET, packaging wheel/sdist e matriz completa de testes | 205 testes direcionados e 398 testes na suíte completa, sem falhas |
+| 2026-08-11 | Codex | Promoção para Implementado após dogfooding externo real com PASS e preservação integral do estado Git | Clone independente da Lucre Agro, HEAD `2d1402764b379bf742c78819eff122cc657d86c5` |

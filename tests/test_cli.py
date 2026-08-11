@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -37,6 +38,23 @@ def _skill_cli_project(tmp_path: Path, *, other_skill: bool = False) -> Path:
     git(tmp_path, "config", "user.email", "skill-cli@invalid.local")
     git(tmp_path, "add", ".")
     git(tmp_path, "commit", "-m", "fixture")
+    return tmp_path
+
+
+def _skill_cli_target(tmp_path: Path) -> Path:
+    config = tmp_path / ".hermes/project.toml"
+    config.parent.mkdir(parents=True)
+    config.write_text(VALID_CONFIG, encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='external-cli-target'\nversion='1'\n",
+        encoding="utf-8",
+    )
+    git(tmp_path, "init", "-b", "main")
+    git(tmp_path, "config", "user.name", "Hermes External CLI Test")
+    git(tmp_path, "config", "user.email", "external-cli@invalid.local")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-m", "fixture")
+    assert not (tmp_path / "skills").exists()
     return tmp_path
 
 
@@ -202,7 +220,7 @@ def test_skill_run_semantic_errors_map_to_normative_exit_codes(tmp_path: Path, c
     unsupported = main(["skill", "run", "other-skill", "--project", str(project), "--format", "json"])
     payload = json.loads(capsys.readouterr().out)
     assert unsupported == 3
-    assert payload["error"]["code"] == "SKILL_EXECUTION_NOT_SUPPORTED"
+    assert payload["error"]["code"] == "SKILL_PLAN_SKILL_NOT_FOUND"
     assert payload["exit_code"] == 3
 
 
@@ -212,7 +230,7 @@ def test_generic_valid_id_reaches_closed_dispatch_through_run_skill(tmp_path: Pa
     code = main(["skill", "run", "other-skill", "--project", str(project), "--format", "json"])
     payload = json.loads(capsys.readouterr().out)
     assert code == 3
-    assert payload["error"]["code"] == "SKILL_EXECUTION_NOT_SUPPORTED"
+    assert payload["error"]["code"] == "SKILL_PLAN_SKILL_NOT_FOUND"
 
 
 def test_real_repository_dogfooding_exercises_full_skill_pipeline(capsys: pytest.CaptureFixture[str]) -> None:
@@ -223,3 +241,138 @@ def test_real_repository_dogfooding_exercises_full_skill_pipeline(capsys: pytest
     assert code == payload["exit_code"]
     assert payload["skill_id"] == "git-preflight"
     assert payload["evidence"]
+
+
+def test_skill_run_project_option_means_target_project(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Spec: HERMES-0007 / AC-02"""
+    target = _skill_cli_target(tmp_path)
+    code = main(
+        ["skill", "run", "git-preflight", "--project", str(target), "--format", "json"]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == payload["exit_code"] == 0
+    assert payload["skill_id"] == "git-preflight"
+
+
+def test_skill_run_target_does_not_require_skills_directory(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Spec: HERMES-0007 / AC-03"""
+    target = _skill_cli_target(tmp_path)
+    assert not (target / "skills").exists()
+    code = main(["skill", "run", "git-preflight", "--project", str(target)])
+    output = capsys.readouterr()
+    assert code == 0
+    assert "status=passed" in output.out
+    assert "exit_code=0" in output.out
+
+
+def test_unknown_catalog_skill_fails_closed_with_exit_code_three(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Spec: HERMES-0007 / AC-08"""
+    target = _skill_cli_target(tmp_path)
+    code = main(
+        ["skill", "run", "missing-skill", "--project", str(target), "--format", "json"]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == payload["exit_code"] == 3
+    assert payload["error"]["code"] == "SKILL_PLAN_SKILL_NOT_FOUND"
+
+
+def test_missing_target_project_fails_closed_before_handler(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Spec: HERMES-0007 / AC-09"""
+    missing = tmp_path / "missing-target"
+    code = main(
+        ["skill", "run", "git-preflight", "--project", str(missing), "--format", "json"]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == payload["exit_code"] == 3
+    assert payload["error"]["code"] == "SKILL_TARGET_INVALID"
+
+
+def test_skill_run_external_clean_clone_dogfooding(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Spec: HERMES-0007 / AC-17"""
+    if os.environ.get("HERMES_RUN_EXTERNAL_DOGFOODING") != "1":
+        pytest.skip("Real external clone dogfooding is an explicit post-suite acceptance step")
+    target = Path(r"C:\Users\Danilo\Projeto\lucreagro-hermes-clone")
+    assert target.is_dir()
+    assert not (target / "skills").exists()
+    before = (
+        git(target, "rev-parse", "HEAD").stdout,
+        git(target, "status", "--porcelain=v1", "-z").stdout,
+        git(target, "diff", "--cached", "--name-status").stdout,
+        git(target, "show-ref").stdout,
+    )
+    code = main(["skill", "run", "git-preflight", "--project", str(target)])
+    output = capsys.readouterr().out
+    after = (
+        git(target, "rev-parse", "HEAD").stdout,
+        git(target, "status", "--porcelain=v1", "-z").stdout,
+        git(target, "diff", "--cached", "--name-status").stdout,
+        git(target, "show-ref").stdout,
+    )
+    assert code == 0
+    assert "status=passed" in output and "exit_code=0" in output
+    assert after == before
+
+
+def test_skill_run_output_and_errors_are_sanitized(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Spec: HERMES-0007 / AC-18"""
+    missing = tmp_path / "private-target"
+    code = main(
+        ["skill", "run", "git-preflight", "--project", str(missing), "--format", "json"]
+    )
+    output = capsys.readouterr()
+    assert code == 3
+    assert str(missing) not in output.out
+    assert "Traceback" not in output.out + output.err
+
+
+def test_existing_skill_run_invocation_remains_compatible(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Spec: HERMES-0007 / AC-20"""
+    root = Path(__file__).resolve().parents[1]
+    code = main(["skill", "run", "git-preflight", "--project", str(root)])
+    output = capsys.readouterr().out
+    assert code in {0, 3}
+    assert "skill_id=git-preflight" in output
+    assert "exit_code=" in output
+
+
+@pytest.mark.parametrize("flag", ["--skills-root", "--catalog", "--hermes-root"])
+def test_skill_run_has_no_catalog_override_option(
+    flag: str,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Spec: HERMES-0007 / AC-25"""
+    target = _skill_cli_target(tmp_path)
+    with pytest.raises(SystemExit) as caught:
+        main(
+            [
+                "skill",
+                "run",
+                "git-preflight",
+                "--project",
+                str(target),
+                flag,
+                "payload",
+            ]
+        )
+    assert caught.value.code == 2
+    assert "unrecognized arguments" in capsys.readouterr().err

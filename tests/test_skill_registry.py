@@ -470,3 +470,10 @@ def test_controlled_reverse_enumeration_is_deterministic(tmp_path: Path) -> None
     normal_ids = tuple(skill.id for skill in _discover(normal).skills)
     reverse_ids = tuple(skill.id for skill in _discover(reverse).skills)
     assert normal_ids == reverse_ids == ("skill-a", "skill-b", "skill-c")
+
+
+def test_explicit_discover_skills_api_remains_compatible(tmp_path: Path) -> None:
+    """Spec: HERMES-0007 / AC-19"""
+    _write_skill(tmp_path, "explicit-skill")
+    registry = _discover(tmp_path)
+    assert tuple(skill.id for skill in registry.skills) == ("explicit-skill",)

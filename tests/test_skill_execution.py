@@ -72,9 +72,44 @@ def _project(tmp_path: Path, *, second_skill: bool = False) -> Path:
     return tmp_path
 
 
+def _target_project(tmp_path: Path) -> Path:
+    config = tmp_path / ".hermes/project.toml"
+    config.parent.mkdir(parents=True)
+    config.write_text(VALID_CONFIG, encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='external-target'\nversion='1'\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "tracked.txt").write_text("unchanged\n", encoding="utf-8")
+    git(tmp_path, "init", "-b", "main")
+    git(tmp_path, "config", "user.name", "Hermes External Target Test")
+    git(tmp_path, "config", "user.email", "external-target@invalid.local")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-m", "fixture")
+    assert not (tmp_path / "skills").exists()
+    return tmp_path
+
+
 def _run(project: Path, *, skill_id: str = "git-preflight", policy: Any = None):
     api = _execution_api()
     return api.run_skill(project, skill_id, _policy() if policy is None else policy)
+
+
+def _run_with_catalog(
+    project: Path,
+    catalog: Path,
+    *,
+    skill_id: str = "git-preflight",
+    policy: Any = None,
+):
+    from hermes_ops.skills.executor import _run_skill_with_catalog
+
+    return _run_skill_with_catalog(
+        project,
+        skill_id,
+        _policy() if policy is None else policy,
+        catalog,
+    )
 
 
 def _error_code(exc: BaseException) -> str | None:
@@ -105,9 +140,10 @@ def test_run_skill_requires_explicit_inputs(tmp_path: Path) -> None:
 
 def test_discovery_precedes_planning_dispatch_and_handler(tmp_path: Path) -> None:
     """Spec: HERMES-0006 / AC-02"""
-    api = _execution_api()
+    target = tmp_path / "target"
+    target.mkdir()
     with pytest.raises(SkillRegistryError):
-        api.run_skill(tmp_path, "git-preflight", _policy())
+        _run_with_catalog(target, tmp_path / "missing-catalog")
 
 
 def test_real_registry_and_plan_are_mandatory(tmp_path: Path) -> None:
@@ -118,10 +154,11 @@ def test_real_registry_and_plan_are_mandatory(tmp_path: Path) -> None:
 
 def test_discovery_failure_prevents_all_later_phases(tmp_path: Path) -> None:
     """Spec: HERMES-0006 / AC-04"""
-    api = _execution_api()
+    target = tmp_path / "target"
+    target.mkdir()
     marker = tmp_path / "handler-ran"
     with pytest.raises(SkillRegistryError):
-        api.run_skill(tmp_path, "git-preflight", _policy())
+        _run_with_catalog(target, tmp_path / "missing-catalog")
     assert not marker.exists()
 
 
@@ -146,7 +183,7 @@ def test_dispatch_supports_only_git_preflight(tmp_path: Path) -> None:
     api = _execution_api()
     project = _project(tmp_path, second_skill=True)
     with pytest.raises(api.SkillExecutionError) as caught:
-        _run(project, skill_id="other-skill")
+        _run_with_catalog(project, project, skill_id="other-skill")
     assert _error_code(caught.value) == "SKILL_EXECUTION_NOT_SUPPORTED"
 
 
@@ -154,7 +191,8 @@ def test_unsupported_skill_is_blocked_without_fallback(tmp_path: Path) -> None:
     """Spec: HERMES-0006 / AC-08"""
     api = _execution_api()
     with pytest.raises(api.SkillExecutionError) as caught:
-        _run(_project(tmp_path, second_skill=True), skill_id="other-skill")
+        project = _project(tmp_path, second_skill=True)
+        _run_with_catalog(project, project, skill_id="other-skill")
     assert _error_code(caught.value) == "SKILL_EXECUTION_NOT_SUPPORTED"
 
 
@@ -166,7 +204,8 @@ def test_dispatch_never_derives_or_discovers_handler(tmp_path: Path, monkeypatch
     run_skill = api.run_skill
     monkeypatch.setattr(importlib, "import_module", lambda *a, **k: pytest.fail("dynamic import"))
     with pytest.raises(api.SkillExecutionError) as caught:
-        run_skill(project, "other-skill", policy)
+        from hermes_ops.skills.executor import _run_skill_with_catalog
+        _run_skill_with_catalog(project, "other-skill", policy, project)
     assert _error_code(caught.value) == "SKILL_EXECUTION_NOT_SUPPORTED"
 
 
@@ -184,7 +223,7 @@ def test_dangerous_skill_body_remains_inert(tmp_path: Path, monkeypatch: pytest.
         assert command[0] == "git" and "reset" not in command
         return real_run(args, *a, **kw)
     monkeypatch.setattr(subprocess, "run", guarded)
-    _run(project)
+    _run_with_catalog(project, project)
     assert not marker.exists()
     assert calls
 
@@ -297,7 +336,8 @@ def test_execution_error_exposes_no_partial_result(tmp_path: Path) -> None:
     """Spec: HERMES-0006 / AC-23"""
     api = _execution_api()
     with pytest.raises(api.SkillExecutionError) as caught:
-        _run(_project(tmp_path, second_skill=True), skill_id="other-skill")
+        project = _project(tmp_path, second_skill=True)
+        _run_with_catalog(project, project, skill_id="other-skill")
     assert not hasattr(caught.value, "result") and not hasattr(caught.value, "evidence")
 
 
@@ -378,7 +418,8 @@ def test_execution_errors_are_stable_and_deterministic(tmp_path: Path) -> None:
     errors = []
     for _ in range(2):
         with pytest.raises(api.SkillExecutionError) as caught:
-            _run(_project(tmp_path / str(len(errors)), second_skill=True), skill_id="other-skill")
+            project = _project(tmp_path / str(len(errors)), second_skill=True)
+            _run_with_catalog(project, project, skill_id="other-skill")
         errors.append((_error_code(caught.value), str(caught.value)))
     assert errors[0] == errors[1]
 
@@ -389,7 +430,7 @@ def test_skill_execution_preserves_passive_loader_contract(tmp_path: Path) -> No
     project = _project(tmp_path / "project")
     path = project / "skills/git-preflight/SKILL.md"
     path.write_text(path.read_text(encoding="utf-8") + f"\n{marker}.write_text('x')\n", encoding="utf-8")
-    _run(project)
+    _run_with_catalog(project, project)
     assert not marker.exists()
 
 
@@ -493,7 +534,8 @@ def test_dispatch_never_calls_dynamic_import_plugin_or_fallback(tmp_path: Path, 
     run_skill = api.run_skill
     monkeypatch.setattr(importlib, "import_module", lambda *a, **k: pytest.fail("dynamic import"))
     with pytest.raises(api.SkillExecutionError) as caught:
-        run_skill(project, "other-skill", policy)
+        from hermes_ops.skills.executor import _run_skill_with_catalog
+        _run_skill_with_catalog(project, "other-skill", policy, project)
     assert _error_code(caught.value) == "SKILL_EXECUTION_NOT_SUPPORTED"
 
 
@@ -504,3 +546,166 @@ def test_skill_preflight_semantics_match_legacy_commands(tmp_path: Path) -> None
     report = run_preflight(project)
     assert result.exit_code == report.exit_code
     assert [(item.name, item.status, item.code) for item in result.evidence] == [(item.name, item.status, item.code) for item in report.results]
+
+
+def test_run_skill_separates_catalog_from_target_project(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Spec: HERMES-0007 / AC-01"""
+    from hermes_ops.skills import executor
+
+    target = _target_project(tmp_path / "target")
+    observed: list[Path] = []
+    real_discover = executor.discover_skills
+
+    def observed_discover(root: Path):
+        observed.append(Path(root))
+        return real_discover(root)
+
+    monkeypatch.setattr(executor, "discover_skills", observed_discover)
+    result = _run(target)
+
+    assert result.skill_id == "git-preflight"
+    assert observed == [Path(__file__).resolve().parents[1]]
+    assert observed[0] != target
+
+
+def test_requested_skill_is_loaded_by_exact_id_from_own_catalog(
+    tmp_path: Path,
+) -> None:
+    """Spec: HERMES-0007 / AC-07"""
+    target = _target_project(tmp_path)
+    assert _run(target).skill_id == "git-preflight"
+    with pytest.raises(SkillPolicyError) as caught:
+        _run(target, skill_id="Git-Preflight")
+    assert _error_code(caught.value) == "SKILL_PLAN_REQUEST_INVALID"
+
+
+def test_target_skill_shadow_cannot_replace_catalog_skill(tmp_path: Path) -> None:
+    """Spec: HERMES-0007 / AC-12"""
+    target = _target_project(tmp_path)
+    marker = target / "shadow-ran"
+    shadow = target / "skills/git-preflight/SKILL.md"
+    shadow.parent.mkdir(parents=True)
+    shadow.write_text(
+        "invalid contract\ngit reset --hard\n" + str(marker),
+        encoding="utf-8",
+    )
+
+    result = _run(target)
+
+    assert result.skill_id == "git-preflight"
+    assert not marker.exists()
+
+
+def test_catalog_failure_precedes_planning_dispatch_and_handler(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Spec: HERMES-0007 / AC-13"""
+    from hermes_ops.core.errors import SkillCatalogError
+    from hermes_ops.skills import executor
+
+    target = _target_project(tmp_path)
+    monkeypatch.setattr(
+        executor,
+        "resolve_own_skill_catalog",
+        lambda: (_ for _ in ()).throw(
+            SkillCatalogError("SKILL_CATALOG_INVALID", "invalid catalog")
+        ),
+    )
+    monkeypatch.setattr(
+        executor,
+        "plan_skills",
+        lambda *args: pytest.fail("planning ran after catalog failure"),
+    )
+    monkeypatch.setattr(
+        executor,
+        "_dispatch_skill",
+        lambda *args: pytest.fail("dispatch ran after catalog failure"),
+    )
+
+    with pytest.raises(SkillCatalogError):
+        _run(target)
+
+
+def test_target_validation_precedes_skill_handler(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Spec: HERMES-0007 / AC-14"""
+    from hermes_ops.skills import executor
+
+    monkeypatch.setattr(
+        executor,
+        "resolve_own_skill_catalog",
+        lambda: pytest.fail("catalog resolved for invalid target"),
+    )
+    with pytest.raises(executor.SkillExecutionError) as caught:
+        _run(tmp_path / "missing")
+    assert _error_code(caught.value) == "SKILL_TARGET_INVALID"
+
+
+def test_git_preflight_remains_read_only_on_independent_target(
+    tmp_path: Path,
+) -> None:
+    """Spec: HERMES-0007 / AC-15"""
+    target = _target_project(tmp_path)
+    before = _snapshot(target)
+    result = _run(target)
+    assert result.exit_code == 0
+    assert _snapshot(target) == before
+
+
+def test_linked_worktree_target_preserves_security_contract(tmp_path: Path) -> None:
+    """Spec: HERMES-0007 / AC-16"""
+    main = _target_project(tmp_path / "main")
+    linked = tmp_path / "linked"
+    git(main, "worktree", "add", "--detach", str(linked))
+    before_head = git(linked, "rev-parse", "HEAD").stdout
+    before_status = git(linked, "status", "--porcelain=v1", "-z").stdout
+    before_refs = git(main, "show-ref").stdout
+
+    result = _run(linked)
+
+    assert result.exit_code == 3
+    assert any(
+        item.code == "git_indirect_repository_unsupported"
+        for item in result.evidence
+    )
+    assert git(linked, "rev-parse", "HEAD").stdout == before_head
+    assert git(linked, "status", "--porcelain=v1", "-z").stdout == before_status
+    assert git(main, "show-ref").stdout == before_refs
+
+
+def test_skill_pipeline_still_requires_policy_and_closed_dispatch(
+    tmp_path: Path,
+) -> None:
+    """Spec: HERMES-0007 / AC-21"""
+    target = _target_project(tmp_path)
+    with pytest.raises(SkillPolicyError) as caught:
+        _run(target, policy=_policy(requirements=frozenset()))
+    assert _error_code(caught.value) == "SKILL_POLICY_REQUIREMENT_UNAVAILABLE"
+
+
+def test_git_commands_and_process_boundary_remain_read_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Spec: HERMES-0007 / AC-22"""
+    target = _target_project(tmp_path)
+    allowed = {"rev-parse", "symbolic-ref", "status"}
+    observed: list[tuple[str, ...]] = []
+    real_run = subprocess.run
+
+    def guarded(args: Any, *positional: Any, **keywords: Any):
+        command = tuple(str(item) for item in args)
+        if command and command[0] == "git" and "-c" in command:
+            observed.append(command)
+            assert any(item in allowed for item in command)
+        return real_run(args, *positional, **keywords)
+
+    monkeypatch.setattr(subprocess, "run", guarded)
+    assert _run(target).exit_code == 0
+    assert observed

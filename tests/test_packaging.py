@@ -163,3 +163,55 @@ def test_wheel_installs_and_runs_all_commands_in_isolation(
         assert payload["command"] == command
         assert str(project) not in completed.stdout
         assert "<PROJECT_ROOT>" in completed.stdout
+
+    skill = subprocess.run(
+        (
+            str(python),
+            "-m",
+            "hermes_ops",
+            "skill",
+            "run",
+            "git-preflight",
+            "--project",
+            str(project),
+            "--format",
+            "json",
+        ),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert skill.returncode == 0, skill.stdout + skill.stderr
+    payload = json.loads(skill.stdout)
+    assert payload["skill_id"] == "git-preflight"
+    assert payload["status"] == "passed"
+    assert not (project / "skills").exists()
+
+
+def test_wheel_and_sdist_include_own_skill_catalog(
+    built_artifacts: dict[str, Path],
+) -> None:
+    """Spec: HERMES-0007 / AC-24"""
+    canonical = (
+        Path(__file__).resolve().parents[1]
+        / "skills/git-preflight/SKILL.md"
+    ).read_bytes()
+    wheel_suffix = "hermes_ops_skill_catalog/skills/git-preflight/SKILL.md"
+    with zipfile.ZipFile(built_artifacts["wheel"]) as archive:
+        wheel_matches = [
+            name for name in archive.namelist() if name.endswith(wheel_suffix)
+        ]
+        assert len(wheel_matches) == 1
+        assert archive.read(wheel_matches[0]) == canonical
+
+    with tarfile.open(built_artifacts["sdist"], "r:gz") as archive:
+        sdist_matches = [
+            member
+            for member in archive.getmembers()
+            if member.name.endswith("/skills/git-preflight/SKILL.md")
+        ]
+        assert len(sdist_matches) == 1
+        extracted = archive.extractfile(sdist_matches[0])
+        assert extracted is not None
+        assert extracted.read() == canonical
