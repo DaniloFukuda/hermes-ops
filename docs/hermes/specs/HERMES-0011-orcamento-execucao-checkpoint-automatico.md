@@ -99,15 +99,37 @@ test = "tests/test_execution_security.py::test_checkpoint_cannot_capture_env_cre
 [[acceptance_criteria]]
 id = "AC-30"
 test = "tests/test_execution_regression.py::test_git_queries_keep_existing_read_only_security_contract"
+[[acceptance_criteria]]
+id = "AC-31"
+test = "tests/test_execution_context.py::test_context_preserves_budget_identity_and_is_immutable"
+[[acceptance_criteria]]
+id = "AC-32"
+test = "tests/test_execution_context.py::test_context_rejects_non_budget_value"
+[[acceptance_criteria]]
+id = "AC-33"
+test = "tests/test_execution_context.py::test_run_skill_without_context_preserves_legacy_result"
+[[acceptance_criteria]]
+id = "AC-34"
+test = "tests/test_execution_context.py::test_same_context_reaches_dispatch_boundary"
+[[acceptance_criteria]]
+id = "AC-35"
+test = "tests/test_execution_context.py::test_run_skill_does_not_consume_supplied_budget"
+[[acceptance_criteria]]
+id = "AC-36"
+test = "tests/test_execution_context.py::test_context_creation_has_no_external_effects"
+[[acceptance_criteria]]
+id = "AC-37"
+test = "tests/test_execution_context.py::test_context_does_not_change_public_skill_result"
 +++
 
 # HERMES-0011 — Orçamento de Execução e Checkpoint Automático
 
 ## Status
 
-Rascunho. Esta especificação registra a auditoria e uma proposta técnica. Ela
-não autoriza implementação, alteração de código de produção, criação das skills
-propostas nem integração com contador externo.
+Rascunho. O domínio puro de `ExecutionBudget` e o transporte explícito de
+`ExecutionContext` estão autorizados e implementados parcialmente. Defaults,
+enforcement, instrumentação, checkpoint, handoff, novas skills e integração com
+contador externo continuam não autorizados por esta fase.
 
 ## Resumo para o Responsável pelo Projeto
 
@@ -248,6 +270,12 @@ ou filesystem: branch, HEAD e status devem vir de estado já coletado por açõe
 orçadas. Caso esse estado não exista, os campos ficam explicitamente
 `unknown`, sem consulta oportunista escondida.
 
+Na fase HERMES-0011B, `ExecutionContext` contém exclusivamente um
+`ExecutionBudget` fornecido explicitamente. Ele não cria ID ou timestamp, não
+consome unidades e não contém journal. `None` preserva integralmente a execução
+legada; um contexto fornecido é transportado até `_dispatch_skill`, onde poderá
+ser usado por instrumentação futura.
+
 ## Fora do Escopo
 
 - ler ou integrar o contador 32/32 da infraestrutura;
@@ -258,7 +286,8 @@ orçadas. Caso esse estado não exista, os campos ficam explicitamente
 - persistir checkpoint dentro do projeto automaticamente;
 - implementar `execution-budget`, `checkpoint-handoff` ou `spec-guardian` nesta
   rodada;
-- mudar handlers, configuração, CLI ou código de produção nesta rodada.
+- mudar handlers, configuração ou CLI nesta rodada;
+- consumir budget ou adicionar enforcement durante o transporte do contexto.
 
 ## Arquitetura Proposta
 
@@ -266,8 +295,9 @@ orçadas. Caso esse estado não exista, os campos ficam explicitamente
 
 O ponto principal é `skills.executor.run_skill`, imediatamente após validar a
 raiz explícita e antes de catálogo, descoberta, planejamento e handler. Ele deve
-criar ou receber um `ExecutionContext` e passá-lo explicitamente às camadas
-controladas. Não deve haver singleton nem estado global.
+receber opcionalmente um `ExecutionContext` e passá-lo explicitamente até o
+dispatcher. Enquanto defaults não forem calibrados, `None` não cria contexto ou
+budget. Não deve haver singleton nem estado global.
 
 Para cobrir ações reais, duas bordas devem aceitar um observador/contexto:
 
@@ -279,6 +309,25 @@ Os comandos legados poderão adotar o mesmo contexto em fase compatível
 posterior. Contar apenas ao redor do handler seria insuficiente, pois esconderia
 as múltiplas consultas Git e leituras internas. Contar apenas na CLI também
 seria insuficiente para consumidores da API Python.
+
+### ExecutionContext — fase HERMES-0011B
+
+Modelo `frozen` e `slots` com um único campo obrigatório, `budget`. O campo
+preserva a identidade do `ExecutionBudget` recebido; nenhuma cópia ou transição
+é realizada. O contexto não possui `execution_id`, pois ainda não existe uso que
+justifique identidade adicional.
+
+O caminho implementado é:
+
+```text
+run_skill
+    → _run_skill_with_catalog
+        → _dispatch_skill
+            → handler existente sem parâmetro novo
+```
+
+O dispatcher é o limite atual de propagação e o ponto futuro de instrumentação.
+Nenhum handler recebe ou consulta o contexto nesta fase.
 
 ### ExecutionBudget
 
@@ -615,6 +664,14 @@ COMEÇAR pelo próximo passo recomendado, sujeito à política e ao novo budget
 - **AC-29:** tentativa de incluir `.env`, credencial ou dump completo é
   removida ou bloqueada, com regressão contra vazamento.
 - **AC-30:** consultas Git mantêm ambiente e allowlist read-only atuais.
+- **AC-31:** contexto é imutável e preserva a identidade exata do budget.
+- **AC-32:** valor que não seja `ExecutionBudget` é rejeitado explicitamente.
+- **AC-33:** `run_skill` sem contexto preserva o caminho e resultado legados.
+- **AC-34:** a mesma instância de contexto chega ao limite de dispatcher.
+- **AC-35:** transportar contexto não chama `consume` nem altera `used_units`.
+- **AC-36:** criar contexto não acessa filesystem, subprocesso ou rede.
+- **AC-37:** contexto não adiciona campos nem altera o resultado público da
+  skill.
 
 ## Plano de Testes
 
@@ -628,6 +685,7 @@ COMEÇAR pelo próximo passo recomendado, sujeito à política e ao novo budget
 | AC-22–AC-24 | integração | `tests/test_execution_integration.py` | contexto atravessa bordas reais |
 | AC-27–AC-29 | segurança | `tests/test_execution_security.py` | permitido, bloqueado e regressão |
 | AC-13, AC-30 | regressão | `tests/test_execution_regression.py` | CLI/config/skills/Git existentes |
+| AC-31–AC-37 | unitário/integração | `tests/test_execution_context.py` | contexto, transporte sem consumo e compatibilidade |
 
 Cada teste novo deve citar `Spec: HERMES-0011 / AC-XX`. AC-29 compõe a tríade
 de segurança: comportamento permitido (metadados sanitizados), bloqueado
@@ -794,14 +852,16 @@ sentido depois que o núcleo possui enforcement.
 
 ## Evidências da Implementação
 
-Implementação parcial restrita à fase 1 (domínio puro). O status permanece
-`Rascunho` porque defaults, configuração, journal, checkpoint e integração
-continuam abertos e não implementados.
+Implementação parcial das fases 0011A (domínio puro) e 0011B (transporte de
+contexto). O status permanece `Rascunho` porque defaults, configuração,
+journal, checkpoint, enforcement e instrumentação continuam abertos.
 
 | Campo | Valor |
 |---|---|
 | Testes direcionados | `.venv\\Scripts\\python.exe -m pytest tests/test_execution_budget.py -q` → `27 passed` |
-| Suíte completa | `.venv\\Scripts\\python.exe -m pytest -q --basetemp <TEMP>` → `525 passed, 11 skipped` |
+| Testes ExecutionContext | `.venv\\Scripts\\python.exe -m pytest tests/test_execution_context.py -q` → `9 passed` |
+| Regressões de skills | `.venv\\Scripts\\python.exe -m pytest tests/test_skill_execution.py tests/test_skill_registry.py tests/test_skill_policy.py -q --basetemp <TEMP>` → `162 passed, 6 skipped` |
+| Suíte completa | `.venv\\Scripts\\python.exe -m pytest -q --basetemp <TEMP>` → `534 passed, 11 skipped` |
 | compileall | `.venv\\Scripts\\python.exe -m compileall src` → OK |
 | Limitações | primeira execução completa terminou no teardown do pytest por `WinError 5`; repetição com basetemp isolado passou |
 
@@ -811,3 +871,4 @@ continuam abertos e não implementados.
 |---|---|---|---|
 | 2026-08-12 | Codex | Auditoria inicial, classificação B e proposta técnica | Dogfooding Lucre Agro |
 | 2026-08-12 | Codex | Desambiguou thresholds/reservas/categorias e implementou somente o domínio puro | Fase HERMES-0011A |
+| 2026-08-12 | Codex | Adicionou contexto mínimo e transporte até o dispatcher, sem consumo | Fase HERMES-0011B |

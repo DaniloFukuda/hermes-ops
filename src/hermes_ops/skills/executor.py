@@ -7,6 +7,7 @@ from hermes_ops.commands.preflight import run_preflight
 from hermes_ops.core.errors import PathResolutionError, SkillExecutionError
 from hermes_ops.core.paths import resolve_directory
 from hermes_ops.core.results import Report
+from hermes_ops.execution import ExecutionContext
 from hermes_ops.skills.catalog import resolve_own_skill_catalog
 from hermes_ops.skills.code_audit import run_code_audit, validate_code_audit_target
 from hermes_ops.skills.execution_models import (
@@ -22,6 +23,11 @@ from hermes_ops.skills.registry import discover_skills
 
 def _invalid(message: str) -> None:
     raise SkillExecutionError("SKILL_EXECUTION_INVALID", message)
+
+
+def _validate_execution_context(value: Any) -> None:
+    if value is not None and type(value) is not ExecutionContext:
+        _invalid("Execution context must be an ExecutionContext or None")
 
 
 def _build_execution_result(skill_id: str, report: Report) -> SkillExecutionResult:
@@ -58,7 +64,10 @@ def _dispatch_skill(
     target_project: str | Path,
     original_target: Any | None = None,
     inputs: SkillRunInputs = SkillRunInputs(),
+    *,
+    execution_context: ExecutionContext | None = None,
 ) -> SkillExecutionResult:
+    _validate_execution_context(execution_context)
     if type(plan) is not SkillPlan or len(plan.skills) != 1:
         _invalid("Execution requires an approved unitary SkillPlan")
     if plan.skills[0].id == "git-preflight":
@@ -79,9 +88,12 @@ def _run_skill_with_catalog(
     policy: Any,
     catalog_root: Path,
     inputs: SkillRunInputs = SkillRunInputs(),
+    *,
+    execution_context: ExecutionContext | None = None,
 ) -> SkillExecutionResult:
     if project_root is None or type(skill_id) is not str or type(policy) is not SkillPolicy:
         _invalid("Execution requires an explicit project root, skill id, and SkillPolicy")
+    _validate_execution_context(execution_context)
     try:
         target_project = resolve_directory(project_root)
     except PathResolutionError as exc:
@@ -97,7 +109,13 @@ def _run_skill_with_catalog(
         _invalid("--mission is only valid for mission-audit")
     registry = discover_skills(catalog_root)
     plan = plan_skills(registry, (skill_id,), policy)
-    return _dispatch_skill(plan, target_project, project_root, inputs)
+    return _dispatch_skill(
+        plan,
+        target_project,
+        project_root,
+        inputs,
+        execution_context=execution_context,
+    )
 
 
 def run_skill(
@@ -106,6 +124,7 @@ def run_skill(
     policy: Any,
     *,
     inputs: SkillRunInputs = SkillRunInputs(),
+    execution_context: ExecutionContext | None = None,
 ) -> SkillExecutionResult:
     if project_root is None or type(skill_id) is not str or type(policy) is not SkillPolicy:
         _invalid("Execution requires an explicit project root, skill id, and SkillPolicy")
@@ -118,7 +137,15 @@ def run_skill(
         ) from exc
     if type(inputs) is not SkillRunInputs:
         _invalid("Execution inputs must be SkillRunInputs")
+    _validate_execution_context(execution_context)
     if skill_id in {"code-audit", "mission-audit"}:
         validate_code_audit_target(project_root)
     catalog_root = resolve_own_skill_catalog()
-    return _run_skill_with_catalog(project_root, skill_id, policy, catalog_root, inputs)
+    return _run_skill_with_catalog(
+        project_root,
+        skill_id,
+        policy,
+        catalog_root,
+        inputs,
+        execution_context=execution_context,
+    )
