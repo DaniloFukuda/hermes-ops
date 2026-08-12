@@ -8,8 +8,17 @@ from typing import Any
 
 import pytest
 
-from hermes_ops.core.errors import SkillExecutionError
-from hermes_ops.execution import ExecutionBudget, ExecutionContext
+from hermes_ops.core.errors import (
+    ExecutionBudgetExceeded,
+    ExecutionBudgetReserved,
+    SkillExecutionError,
+)
+from hermes_ops.execution import (
+    BudgetDecision,
+    ExecutionBudget,
+    ExecutionCategory,
+    ExecutionContext,
+)
 from hermes_ops.skills.execution_models import (
     SkillExecutionResult,
     SkillExecutionStatus,
@@ -248,3 +257,124 @@ def test_run_skill_rejects_invalid_context_before_catalog(
         )
 
     assert captured.value.code == "SKILL_EXECUTION_INVALID"
+
+
+def test_consume_returns_new_context_and_preserves_previous_snapshot() -> None:
+    """Spec: HERMES-0011 / AC-38."""
+    original_budget = budget()
+    context0 = ExecutionContext(original_budget)
+
+    context1 = context0.consume(ExecutionCategory.EXPLORATION)
+
+    assert context1 is not context0
+    assert context1.budget is not context0.budget
+    assert context0.budget is original_budget
+    assert context0.budget.used_units == 0
+    assert context1.budget.used_units == 1
+
+
+def test_multiple_context_transitions_preserve_every_snapshot() -> None:
+    """Spec: HERMES-0011 / AC-39."""
+    context0 = ExecutionContext(budget())
+
+    context1 = context0.consume(ExecutionCategory.IMPLEMENTATION)
+    context2 = context1.consume(ExecutionCategory.VALIDATION, units=2)
+
+    assert context0.budget.used_units == 0
+    assert context1.budget.used_units == 1
+    assert context2.budget.used_units == 3
+    assert len({id(context0), id(context1), id(context2)}) == 3
+    assert len({id(context0.budget), id(context1.budget), id(context2.budget)}) == 3
+
+
+def test_context_delegates_category_units_and_decision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Spec: HERMES-0011 / AC-40."""
+    context = ExecutionContext(budget(used=2))
+    calls: list[tuple[ExecutionCategory, int]] = []
+    original_can_start = ExecutionBudget.can_start
+
+    def observed_can_start(
+        value: ExecutionBudget,
+        category: ExecutionCategory,
+        units: int = 1,
+    ) -> BudgetDecision:
+        calls.append((category, units))
+        return original_can_start(value, category, units)
+
+    monkeypatch.setattr(ExecutionBudget, "can_start", observed_can_start)
+
+    decision = context.can_start(ExecutionCategory.VALIDATION, units=2)
+
+    assert decision is BudgetDecision.WARNING
+    assert calls == [(ExecutionCategory.VALIDATION, 2)]
+    assert context.budget.used_units == 2
+
+
+def test_context_consume_respects_category_and_units() -> None:
+    """Spec: HERMES-0011 / AC-38, AC-40."""
+    context = ExecutionContext(budget(used=6))
+
+    updated = context.consume(ExecutionCategory.VALIDATION, units=2)
+
+    assert context.budget.used_units == 6
+    assert updated.budget.used_units == 8
+    assert updated.budget.remaining == updated.budget.closure_reserve
+
+
+def test_reserved_transition_propagates_error_without_changing_context() -> None:
+    """Spec: HERMES-0011 / AC-41."""
+    context = ExecutionContext(budget(used=6))
+    original_budget = context.budget
+
+    with pytest.raises(ExecutionBudgetReserved) as captured:
+        context.consume(ExecutionCategory.EXPLORATION)
+
+    assert captured.value.code == "EXECUTION_BUDGET_RESERVED"
+    assert context.budget is original_budget
+    assert context.budget.used_units == 6
+
+
+def test_checkpoint_transition_propagates_reserved_error() -> None:
+    """Spec: HERMES-0011 / AC-41."""
+    context = ExecutionContext(budget(used=5))
+
+    assert (
+        context.can_start(ExecutionCategory.IMPLEMENTATION)
+        is BudgetDecision.CHECKPOINT_REQUIRED
+    )
+    with pytest.raises(ExecutionBudgetReserved, match="checkpoint"):
+        context.consume(ExecutionCategory.IMPLEMENTATION)
+    assert context.budget.used_units == 5
+
+
+def test_exhausted_transition_propagates_error_without_changing_context() -> None:
+    """Spec: HERMES-0011 / AC-42."""
+    context = ExecutionContext(budget(used=9))
+    original_budget = context.budget
+
+    with pytest.raises(ExecutionBudgetExceeded) as captured:
+        context.consume(ExecutionCategory.CLOSURE, units=2)
+
+    assert captured.value.code == "EXECUTION_BUDGET_EXCEEDED"
+    assert context.budget is original_budget
+    assert context.budget.used_units == 9
+
+
+def test_context_transitions_have_no_external_effects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Spec: HERMES-0011 / AC-36, AC-38."""
+    def forbidden(*args: object, **kwargs: object) -> object:
+        raise AssertionError("external effect attempted")
+
+    monkeypatch.setattr("builtins.open", forbidden)
+    monkeypatch.setattr(subprocess, "run", forbidden)
+    monkeypatch.setattr(socket, "socket", forbidden)
+    monkeypatch.setattr(Path, "read_text", forbidden)
+    monkeypatch.setattr(Path, "write_text", forbidden)
+
+    context = ExecutionContext(budget())
+    assert context.can_start(ExecutionCategory.CLOSURE) is BudgetDecision.ALLOWED
+    assert context.consume(ExecutionCategory.CLOSURE).budget.used_units == 1

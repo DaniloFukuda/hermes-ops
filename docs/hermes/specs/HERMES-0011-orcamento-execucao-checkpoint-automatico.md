@@ -120,6 +120,21 @@ test = "tests/test_execution_context.py::test_context_creation_has_no_external_e
 [[acceptance_criteria]]
 id = "AC-37"
 test = "tests/test_execution_context.py::test_context_does_not_change_public_skill_result"
+[[acceptance_criteria]]
+id = "AC-38"
+test = "tests/test_execution_context.py::test_consume_returns_new_context_and_preserves_previous_snapshot"
+[[acceptance_criteria]]
+id = "AC-39"
+test = "tests/test_execution_context.py::test_multiple_context_transitions_preserve_every_snapshot"
+[[acceptance_criteria]]
+id = "AC-40"
+test = "tests/test_execution_context.py::test_context_delegates_category_units_and_decision"
+[[acceptance_criteria]]
+id = "AC-41"
+test = "tests/test_execution_context.py::test_reserved_transition_propagates_error_without_changing_context"
+[[acceptance_criteria]]
+id = "AC-42"
+test = "tests/test_execution_context.py::test_exhausted_transition_propagates_error_without_changing_context"
 +++
 
 # HERMES-0011 — Orçamento de Execução e Checkpoint Automático
@@ -328,6 +343,38 @@ run_skill
 
 O dispatcher é o limite atual de propagação e o ponto futuro de instrumentação.
 Nenhum handler recebe ou consulta o contexto nesta fase.
+
+### Transição imutável — fase HERMES-0011C
+
+Entre as opções consideradas, adota-se o contexto imutável que retorna outro
+contexto. `ExecutionContext.can_start(category, units)` delega a decisão ao
+budget corrente. `ExecutionContext.consume(category, units)` chama
+`budget.consume`, recebe o novo snapshot e retorna um novo `ExecutionContext`.
+Não existe wrapper de resultado: a decisão já é representada por
+`BudgetDecision`, e uma transição bem-sucedida precisa retornar somente o novo
+contexto.
+
+O contexto anterior e seu budget permanecem inalterados. Antes de uma
+transição, a identidade pode ser preservada durante o transporte; depois dela,
+um novo contexto e um novo budget são esperados. Os demais campos seriam
+preservados por valor quando existirem; nesta fase, `budget` continua sendo o
+único campo.
+
+Uma borda futura deve decidir e consumir antes do efeito externo:
+
+```text
+context_before
+    → decision = context_before.can_start(category, units)
+    → context_after = context_before.consume(category, units)
+    → executar o efeito somente após a transição bem-sucedida
+    → propagar context_after
+```
+
+Se a decisão resultar em reserva, checkpoint obrigatório ou exaustão,
+`consume` preserva os erros definidos por `ExecutionBudget`; nenhum efeito deve
+começar e `context_before` permanece válido. A fase 0011C define somente esse
+contrato e não o aplica em `run_skill`, dispatcher, handlers, processos ou
+leitores.
 
 ### ExecutionBudget
 
@@ -672,6 +719,15 @@ COMEÇAR pelo próximo passo recomendado, sujeito à política e ao novo budget
 - **AC-36:** criar contexto não acessa filesystem, subprocesso ou rede.
 - **AC-37:** contexto não adiciona campos nem altera o resultado público da
   skill.
+- **AC-38:** consumo bem-sucedido retorna novo contexto e preserva integralmente
+  o snapshot anterior.
+- **AC-39:** múltiplas transições mantêm uma cadeia determinística de snapshots.
+- **AC-40:** contexto delega categoria, unidades e decisão sem duplicar regras
+  do budget.
+- **AC-41:** reserva ou checkpoint bloqueado propaga `ExecutionBudgetReserved`
+  e não altera o contexto anterior.
+- **AC-42:** limite absoluto propaga `ExecutionBudgetExceeded` e não altera o
+  contexto anterior.
 
 ## Plano de Testes
 
@@ -686,6 +742,7 @@ COMEÇAR pelo próximo passo recomendado, sujeito à política e ao novo budget
 | AC-27–AC-29 | segurança | `tests/test_execution_security.py` | permitido, bloqueado e regressão |
 | AC-13, AC-30 | regressão | `tests/test_execution_regression.py` | CLI/config/skills/Git existentes |
 | AC-31–AC-37 | unitário/integração | `tests/test_execution_context.py` | contexto, transporte sem consumo e compatibilidade |
+| AC-38–AC-42 | unitário | `tests/test_execution_context.py` | transições imutáveis, decisões e erros preservados |
 
 Cada teste novo deve citar `Spec: HERMES-0011 / AC-XX`. AC-29 compõe a tríade
 de segurança: comportamento permitido (metadados sanitizados), bloqueado
@@ -852,16 +909,19 @@ sentido depois que o núcleo possui enforcement.
 
 ## Evidências da Implementação
 
-Implementação parcial das fases 0011A (domínio puro) e 0011B (transporte de
-contexto). O status permanece `Rascunho` porque defaults, configuração,
-journal, checkpoint, enforcement e instrumentação continuam abertos.
+Implementação parcial das fases 0011A (domínio puro), 0011B (transporte de
+contexto) e 0011C (transição imutável). O status permanece `Rascunho` porque
+defaults, configuração, journal, checkpoint, enforcement e instrumentação
+continuam abertos.
 
 | Campo | Valor |
 |---|---|
 | Testes direcionados | `.venv\\Scripts\\python.exe -m pytest tests/test_execution_budget.py -q` → `27 passed` |
-| Testes ExecutionContext | `.venv\\Scripts\\python.exe -m pytest tests/test_execution_context.py -q` → `9 passed` |
+| Testes ExecutionContext | `.venv\\Scripts\\python.exe -m pytest tests/test_execution_context.py -q` → `17 passed` |
+| Budget + contexto | `.venv\\Scripts\\python.exe -m pytest tests/test_execution_budget.py tests/test_execution_context.py -q` → `44 passed` |
+| Regressão do executor 0011C | `.venv\\Scripts\\python.exe -m pytest tests/test_skill_execution.py -q --basetemp <TEMP>` → `54 passed` |
 | Regressões de skills | `.venv\\Scripts\\python.exe -m pytest tests/test_skill_execution.py tests/test_skill_registry.py tests/test_skill_policy.py -q --basetemp <TEMP>` → `162 passed, 6 skipped` |
-| Suíte completa | `.venv\\Scripts\\python.exe -m pytest -q --basetemp <TEMP>` → `534 passed, 11 skipped` |
+| Suíte completa | `.venv\\Scripts\\python.exe -m pytest -q --basetemp <TEMP>` → `542 passed, 11 skipped` |
 | compileall | `.venv\\Scripts\\python.exe -m compileall src` → OK |
 | Limitações | primeira execução completa terminou no teardown do pytest por `WinError 5`; repetição com basetemp isolado passou |
 
@@ -872,3 +932,4 @@ journal, checkpoint, enforcement e instrumentação continuam abertos.
 | 2026-08-12 | Codex | Auditoria inicial, classificação B e proposta técnica | Dogfooding Lucre Agro |
 | 2026-08-12 | Codex | Desambiguou thresholds/reservas/categorias e implementou somente o domínio puro | Fase HERMES-0011A |
 | 2026-08-12 | Codex | Adicionou contexto mínimo e transporte até o dispatcher, sem consumo | Fase HERMES-0011B |
+| 2026-08-12 | Codex | Formalizou transição contexto N → N+1 sem instrumentar efeitos | Fase HERMES-0011C |
