@@ -8,6 +8,7 @@ from pathlib import Path
 from hermes_ops.commands.doctor import run_doctor
 from hermes_ops.commands.preflight import run_preflight
 from hermes_ops.commands.worktree import run_worktree
+from hermes_ops.commands.evidence import evidence_analysis_json, evidence_analysis_text, run_evidence_analysis
 from hermes_ops.commands.skill import (
     run_skill_command,
     skill_result_json,
@@ -19,6 +20,7 @@ from hermes_ops.core.errors import (
     SkillExecutionError,
     SkillPolicyError,
     SkillRegistryError,
+    AnalysisError,
 )
 from hermes_ops.core.results import Report
 from hermes_ops.core.presentation import PublicSanitizer
@@ -51,6 +53,14 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="Output format (default: text)",
     )
+    evidence = subparsers.add_parser("evidence")
+    evidence_commands = evidence.add_subparsers(dest="evidence_command", required=True)
+    evidence_analyze = evidence_commands.add_parser("analyze")
+    evidence_analyze.add_argument("--evidence-pack", required=True)
+    evidence_analyze.add_argument("--question", required=True)
+    evidence_analyze.add_argument("--context-budget-chars", required=True, type=int)
+    evidence_analyze.add_argument("--dry-run", action="store_true")
+    evidence_analyze.add_argument("--format", choices=("text", "json"), default="text")
     return parser
 
 
@@ -59,13 +69,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         public_root: str | Path = (
-            Path(args.project).expanduser().resolve(strict=False)
+            Path(getattr(args, "project", "")).expanduser().resolve(strict=False)
         )
     except (OSError, RuntimeError):
-        public_root = args.project
+        public_root = getattr(args, "project", None)
     sanitizer = PublicSanitizer.for_project(public_root)
     if args.command == "skill":
         return _run_skill_cli(args, sanitizer)
+    if args.command == "evidence":
+        return _run_evidence_cli(args, sanitizer)
     try:
         report = _dispatch(args.command, args.project)
     except Exception as exc:  # final boundary: expected callers get no traceback
@@ -159,3 +171,21 @@ def _run_skill_cli(args: argparse.Namespace, sanitizer: PublicSanitizer) -> int:
         else skill_result_text(result, sanitizer)
     )
     return result.exit_code
+
+
+def _run_evidence_cli(args: argparse.Namespace, sanitizer: PublicSanitizer) -> int:
+    try:
+        payload = run_evidence_analysis(args.evidence_pack, args.question, args.context_budget_chars, dry_run=args.dry_run)
+    except AnalysisError as exc:
+        exit_code = 2 if exc.code in {"ANALYSIS_PACK_INVALID","ANALYSIS_PACK_TOO_LARGE","ANALYSIS_PATH_FORBIDDEN","ANALYSIS_QUESTION_INVALID","ANALYSIS_BUDGET_INVALID"} else 3
+        error={"exit_code":exit_code,"error":{"code":exc.code,"message":sanitizer.sanitize_text(str(exc))}}
+        if args.format=="json":
+            import json
+            print(json.dumps(error,ensure_ascii=False,sort_keys=True,separators=(",",":")))
+        else:
+            print(f"ERRO {exc.code}: {error['error']['message']}",file=sys.stderr); print(f"exit_code={exit_code}",file=sys.stderr)
+        return exit_code
+    except Exception as exc:
+        message=sanitizer.sanitize_text(str(exc)); print(f"ERRO external_failure: {message}",file=sys.stderr); print("exit_code=4",file=sys.stderr); return 4
+    print(evidence_analysis_json(payload,sanitizer) if args.format=="json" else evidence_analysis_text(payload,sanitizer))
+    return 0

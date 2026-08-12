@@ -64,6 +64,44 @@ def test_pack_has_traceable_regions_roles_scores_and_tests(tmp_path: Path) -> No
     with pytest.raises(FrozenInstanceError): pack.mission = "changed"  # type: ignore[misc]
 
 
+def test_every_relationship_has_a_materialized_evidence_region(tmp_path: Path) -> None:
+    """Spec: HERMES-0009 / AC-49, AC-50"""
+    pack = build_evidence_pack(_project(tmp_path), "invoice batch process")
+    for relationship in pack.relationships:
+        path, line_text = relationship.evidence_region.rsplit(":", 1)
+        line = int(line_text)
+        assert any(region.path == path and region.start_line <= line <= region.end_line for region in pack.regions)
+
+
+def test_region_limit_drops_relationship_without_provenance_and_marks_omission(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Spec: HERMES-0009 / AC-50, AC-52"""
+    import hermes_ops.skills.mission_audit as mission_audit
+
+    (tmp_path / "seed.py").write_text("import alpha\nimport beta\n", encoding="utf-8")
+    (tmp_path / "alpha.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (tmp_path / "beta.py").write_text("VALUE = 2\n", encoding="utf-8")
+    monkeypatch.setattr(mission_audit, "MAX_REGIONS", 1)
+    first = build_evidence_pack(tmp_path, "audit seed module")
+    second = build_evidence_pack(tmp_path, "audit seed module")
+    assert first == second
+    assert len(first.relationships) == 1
+    assert first.relationships[0].evidence_region == "seed.py:1"
+    assert all(item.evidence_region != "seed.py:2" for item in first.relationships)
+    assert "SELECTION_CAP_REACHED" in first.limitations
+    assert "CAP_OMISSION" in first.completeness.incompleteness_codes
+
+
+def test_mission_pack_is_consumed_directly_by_hermes_0010(tmp_path: Path) -> None:
+    """Spec: HERMES-0009 / AC-53; HERMES-0010 direct compatibility."""
+    from hermes_ops.analysis.builder import build_analysis_request
+
+    pack = build_evidence_pack(_project(tmp_path), "invoice batch process")
+    request, digest = build_analysis_request(pack, "What evidence supports the invoice batch process?", 20_000)
+    assert request.analysis_pack.source_schema_version == pack.schema_version
+    assert request.analysis_pack.relationships
+    assert digest
+
+
 def test_reader_blocks_binary_invalid_encoding_and_linked_worktree(tmp_path: Path) -> None:
     """Spec: HERMES-0009 / AC-07 through AC-11, AC-39, AC-47, AC-48"""
     (tmp_path / "bad.py").write_bytes(b"x\0y")

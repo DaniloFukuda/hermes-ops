@@ -300,3 +300,14 @@ def test_wheel_and_sdist_contain_canonical_mission_audit_skill(
         assert len(matches) == 1
         extracted = archive.extractfile(matches[0])
         assert extracted is not None and extracted.read() == canonical
+
+
+def test_wheel_and_sdist_include_analysis_contract_without_provider(
+    built_artifacts: dict[str, Path],
+) -> None:
+    """Spec: HERMES-0010 / AC-35"""
+    expected = "hermes_ops/analysis/adapter.py"
+    with zipfile.ZipFile(built_artifacts["wheel"]) as archive:
+        assert any(name.endswith(expected) for name in archive.namelist())
+    with tarfile.open(built_artifacts["sdist"], "r:gz") as archive:
+        assert any(member.name.endswith(expected) for member in archive.getmembers())

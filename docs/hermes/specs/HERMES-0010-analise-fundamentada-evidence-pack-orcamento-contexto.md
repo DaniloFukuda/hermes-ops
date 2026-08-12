@@ -122,6 +122,45 @@ justification = "Automatizado com fixture sintética equivalente; o Evidence Pac
 id = "AC-37"
 test = "manual:dogfooding_h0010_saved_lucre_agro_pack"
 justification = "Validação manual futura com Evidence Pack previamente capturado, sem acesso ao clone ou chamada real de API."
+[[acceptance_criteria]]
+id = "AC-38"
+test = "tests/test_analysis_pack.py::test_budget_success_and_selected_evidence_are_monotonic"
+[[acceptance_criteria]]
+id = "AC-39"
+test = "tests/test_analysis_pack.py::test_budget_success_and_selected_evidence_are_monotonic"
+[[acceptance_criteria]]
+id = "AC-40"
+test = "tests/test_analysis_pack.py::test_budget_success_and_selected_evidence_are_monotonic"
+[[acceptance_criteria]]
+id = "AC-41"
+test = "tests/test_analysis_pack.py::test_budget_success_and_selected_evidence_are_monotonic"
+[[acceptance_criteria]]
+id = "AC-42"
+test = "tests/test_analysis_pack.py::test_question_promotes_relevant_structural_target_before_peripheral_chain"
+[[acceptance_criteria]]
+id = "AC-43"
+test = "tests/test_analysis_pack.py::test_question_promotes_relevant_structural_target_before_peripheral_chain"
+[[acceptance_criteria]]
+id = "AC-44"
+test = "tests/test_analysis_pack.py::test_source_score_is_controlled_tiebreaker_below_question_relevance"
+[[acceptance_criteria]]
+id = "AC-45"
+test = "tests/test_analysis_pack.py::test_source_score_is_controlled_tiebreaker_below_question_relevance"
+[[acceptance_criteria]]
+id = "AC-46"
+test = "tests/test_analysis_pack.py::test_question_changes_priority_without_changing_ids_or_provenance"
+[[acceptance_criteria]]
+id = "AC-47"
+test = "tests/test_analysis_pack.py::test_question_promotes_relevant_structural_target_before_peripheral_chain"
+[[acceptance_criteria]]
+id = "AC-48"
+test = "tests/test_analysis_pack.py::test_anchor_structural_unit_precedes_competing_lexical_regions"
+[[acceptance_criteria]]
+id = "AC-49"
+test = "tests/test_analysis_pack.py::test_anchor_structural_unit_precedes_competing_lexical_regions"
+[[acceptance_criteria]]
+id = "AC-50"
+test = "tests/test_analysis_pack.py::test_anchor_structural_unit_precedes_competing_lexical_regions"
 +++
 
 # HERMES-0010 — Análise fundamentada de Evidence Pack com orçamento explícito de contexto
@@ -462,18 +501,42 @@ UTF-8, chaves ordenadas, separadores compactos e sem valores não finitos.
 
 ### Ordem de prioridade fechada
 
-Cada candidato recebe uma chave determinística, nesta ordem:
+O ranking primeiro identifica uma âncora representativa por arquivo com sinais
+diretos da pergunta. As âncoras são ordenadas por:
 
-1. item necessário para manter uma relação estrutural completa;
-2. região que constitui `evidence_region` de relação;
-3. região `active_code` de arquivo `implementation` ou `service`;
-4. região de arquivo `persistence` ou `repository`;
-5. região/teste ligado a item já selecionado;
-6. símbolo ligado a região selecionada;
-7. demais regiões de implementação;
-8. comentários e docstrings;
-9. score original decrescente;
-10. tipo, path, linha e ID em ordem canônica.
+1. cobertura lexical ponderada da pergunta;
+2. quantidade de termos distintos cobertos;
+3. `source_score`, decrescente, como sinal controlado;
+4. papel fechado;
+5. preferência por código ativo;
+6. ID canônico.
+
+Imediatamente após cada âncora entram, como pequena cadeia estrutural ordenada:
+
+1. a própria região de âncora;
+2. a região de provenance de cada relationship direta originada no arquivo;
+3. uma região representativa do target direto correspondente.
+
+Relationships da âncora são ordenadas pela relevância lexical do target,
+`source_score`, papel e IDs canônicos. Somente depois dessas cadeias mínimas
+entram regiões lexicais adicionais das âncoras, demais regiões dos arquivos,
+testes relacionados, outras provenances estruturais e evidência periférica.
+
+Os termos da pergunta são normalizados localmente por NFKC, casefold, remoção
+de acentos, separação lexical e stopwords fechadas. Eles são comparados somente
+com paths, reasons, excerpts e símbolos já presentes no Evidence Pack. Não há
+sinônimo, tradução, stemming, embedding ou semântica externa.
+
+Para reduzir a dominância de termos comuns, cada termo recebe peso inteiro
+determinístico igual a `quantidade_de_arquivos + 1 - frequência_em_arquivos`.
+Não há corpus externo, ponto flutuante ou estado persistente.
+
+A promoção estrutural considera somente relationships já materializadas no
+pack e somente targets diretos de sources lexicalmente relevantes. Para cada
+target promovido, uma única região representativa é escolhida por relevância
+lexical, código ativo e ID. Não há travessia transitiva, nova descoberta ou
+leitura do TARGET. IDs e provenance são atribuídos antes do ranking e não
+mudam quando a pergunta muda.
 
 Uma relação só entra como unidade atômica junto de source, target e região de
 evidência. Se a unidade não couber, ela é omitida integralmente e registrada.
@@ -496,8 +559,8 @@ Não se mantém relação quebrada para economizar caracteres.
 4. Gerar IDs e grafo local.
 5. Formar unidades atômicas de contexto.
 6. Ordenar unidades pela prioridade fechada.
-7. Inserir unidade somente se o payload canônico completo continuar dentro do
-   orçamento.
+7. Avaliar cada prefixo de unidades contra o payload canônico final, incluindo
+   todas as contagens, razões e o digest das omissões do sufixo.
 8. Registrar toda unidade omitida por tipo, motivo e digest de IDs.
 9. Recalcular referências e validar ausência de órfãos.
 10. Serializar, medir e gerar hash.
@@ -518,6 +581,12 @@ são uma unidade local, estável, mensurável e independente de tokenizer.
 Antes da seleção, reserva-se espaço exato para envelope, instruções, pergunta,
 limitações e relatório de orçamento. Cada unidade candidata é testada por
 serialização canônica do pedido resultante, não por estimativa.
+
+Os resultados candidatos são prefixos da ordem fechada e independem do valor
+do budget. O redutor escolhe o prefixo mais longo cujo request final caiba.
+Assim, budget maior nunca retrocede para menos evidência nem transforma sucesso
+anterior em `ANALYSIS_CONTEXT_BUDGET_TOO_SMALL`. Metadados de omissão não são
+acrescentados retroativamente depois de uma decisão de inclusão.
 
 Se nem o envelope mínimo, pergunta, limitações da origem e uma unidade de
 evidência couberem, falhar com `ANALYSIS_CONTEXT_BUDGET_TOO_SMALL`. Se itens
@@ -806,6 +875,31 @@ mínimo.
 - **AC-36:** fixture de benchmark responde exclusivamente do Analysis Pack.
 - **AC-37:** dogfooding futuro reutiliza pack salvo da Lucre Agro, não lê clone
   e não chama API real durante a validação desta especificação.
+- **AC-38:** todo request retornado satisfaz `used_chars <= limit_chars` e seu
+  JSON canônico cabe no budget.
+- **AC-39:** sucesso é monotônico: após um budget passar, budgets maiores não
+  falham com `ANALYSIS_CONTEXT_BUDGET_TOO_SMALL` para a mesma entrada.
+- **AC-40:** contagens de evidência selecionada não diminuem com budget maior;
+  unidades e excerpts permanecem atômicos.
+- **AC-41:** repetição do mesmo budget produz request, digest de omissões e hash
+  exatamente idênticos.
+- **AC-42:** termos lexicais locais da pergunta alteram deterministicamente a
+  prioridade de arquivos e regiões diretamente relacionados.
+- **AC-43:** target direto de relationship originada em arquivo relevante recebe
+  promoção estrutural limitada ao grafo existente.
+- **AC-44:** `source_score` participa dentro da mesma camada, mas não supera
+  relevância direta da pergunta ou conectividade estrutural.
+- **AC-45:** ranking é determinístico e mantém monotonicidade de budget.
+- **AC-46:** perguntas diferentes podem mudar a seleção, nunca os IDs ou a
+  provenance originais.
+- **AC-47:** cadeia service → repository → teste relevante precede relações
+  periféricas concorrentes quando o budget é limitado.
+- **AC-48:** a âncora relevante, provenance estrutural e representante do target
+  direto formam um prefixo coerente antes de regiões lexicais periféricas.
+- **AC-49:** frequência local dos termos, `source_score`, papel, código ativo e
+  IDs produzem ordem determinística sem semântica externa.
+- **AC-50:** prefixo que não contém source, target e provenance completos não
+  emite relationship órfã.
 
 Cada AC automatizado possui o teste indicado no front matter. AC-37 é manual
 porque depende de artefato real controlado que não deve integrar o repositório.

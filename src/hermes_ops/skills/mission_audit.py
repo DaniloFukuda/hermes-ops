@@ -140,6 +140,46 @@ def _resolve_internal_import(source: str, module: str, index: dict[str, tuple[st
     return None
 
 
+def _relationship_line(relationship: EvidenceRelationship) -> tuple[str, int] | None:
+    try:
+        path, line_text = relationship.evidence_region.rsplit(":", 1)
+        line = int(line_text)
+    except (AttributeError, ValueError):
+        return None
+    return (path, line) if path and line >= 1 else None
+
+
+def _select_regions(
+    candidates: list[EvidenceRegion],
+    relationships: list[EvidenceRelationship],
+) -> tuple[list[EvidenceRegion], bool]:
+    """Select regions while keeping structural provenance inside closed caps."""
+    unique = {(region.path, region.start_line, region.end_line): region for region in candidates}
+    required = {
+        locator
+        for relationship in relationships
+        if (locator := _relationship_line(relationship)) is not None
+    }
+    ordered = sorted(
+        unique.values(),
+        key=lambda region: (
+            0 if (region.path, region.start_line) in required and region.start_line == region.end_line else 1,
+            region.path,
+            region.start_line,
+            region.end_line,
+        ),
+    )
+    selected: list[EvidenceRegion] = []
+    per_file: dict[str, int] = {}
+    for region in ordered:
+        if per_file.get(region.path, 0) >= MAX_REGIONS_PER_FILE or len(selected) >= MAX_REGIONS:
+            continue
+        selected.append(region)
+        per_file[region.path] = per_file.get(region.path, 0) + 1
+    selected.sort(key=lambda region: (region.path, region.start_line, region.end_line))
+    return selected, len(selected) < len(unique)
+
+
 def build_evidence_pack(target:Any, mission_value:Any)->MissionEvidencePack:
     mission, initial=normalize_mission(mission_value); inventory=read_source_documents(target); direct=tuple(t.term for t in initial)
     indexed=sum(len(_symbols(d)) for d in inventory.documents)
@@ -191,9 +231,34 @@ def build_evidence_pack(target:Any, mission_value:Any)->MissionEvidencePack:
                     if (target_path,target_line,target_line) not in region_keys:
                         regions.append(EvidenceRegion(target_path,target_line,target_line,text.strip()[:2000],"active_code",(f"one-hop import from {locator}",)))
                         region_keys.add((target_path,target_line,target_line))
-    file_rows.sort(key=lambda f:(-f.score,f.path)); omitted=len(file_rows)>MAX_FILES or len(regions)>MAX_REGIONS or len(symbols)>MAX_PACK_SYMBOLS or len(relationships)>MAX_RELATIONSHIPS or len(tests)>MAX_TESTS
+    file_rows.sort(key=lambda f:(-f.score,f.path))
+    file_cap_reached=len(file_rows)>MAX_FILES
+    file_rows=file_rows[:MAX_FILES]
+    selected_paths={item.path for item in file_rows}
+    regions,region_cap_reached=_select_regions(regions,relationships)
+    regions=[region for region in regions if region.path in selected_paths]
+    region_keys={(region.path,region.start_line,region.end_line) for region in regions}
+    relationship_candidates=sorted(relationships,key=lambda r:(r.kind,r.source,r.target,r.evidence_region,r.reason))
+    relationships=[]
+    for relationship in relationship_candidates:
+        locator=_relationship_line(relationship)
+        if locator is None or relationship.source not in selected_paths or relationship.target not in selected_paths:
+            continue
+        path,line=locator
+        if not any(region_path==path and start<=line<=end for region_path,start,end in region_keys):
+            continue
+        relationships.append(relationship)
+    relationship_provenance_omitted=len(relationships)<len(relationship_candidates)
+    relationship_cap_reached=len(relationships)>MAX_RELATIONSHIPS
+    relationships=relationships[:MAX_RELATIONSHIPS]
+    symbol_candidates=[symbol for symbol in symbols if symbol.path in selected_paths]
+    symbol_cap_reached=len(symbol_candidates)>MAX_PACK_SYMBOLS
+    symbols=sorted(symbol_candidates,key=lambda s:(s.path,s.region,s.name))[:MAX_PACK_SYMBOLS]
+    test_candidates=[test for test in tests if test.path in selected_paths]
+    test_cap_reached=len(test_candidates)>MAX_TESTS
+    tests=sorted(test_candidates,key=lambda t:t.path)[:MAX_TESTS]
+    omitted=any((file_cap_reached,region_cap_reached,symbol_cap_reached,relationship_cap_reached,test_cap_reached,relationship_provenance_omitted))
     if omitted: limitations.append("SELECTION_CAP_REACHED")
-    file_rows=file_rows[:MAX_FILES]; regions=sorted(regions,key=lambda r:(r.path,r.start_line))[:MAX_REGIONS]; symbols=sorted(symbols,key=lambda s:(s.path,s.region,s.name))[:MAX_PACK_SYMBOLS]; relationships=sorted(relationships,key=lambda r:(r.kind,r.source,r.target))[:MAX_RELATIONSHIPS]; tests=sorted(tests,key=lambda t:t.path)[:MAX_TESTS]
     matched=tuple(sorted(t for t,c in counts.items() if c)); unmatched=tuple(sorted(t for t,c in counts.items() if not c)); active=any(r.content_kind=="active_code" for r in regions); related=bool(relationships); has_test=bool(tests)
     central=tuple(t.term for t in initial if t.source=="mission"); uncovered_central=tuple(t for t in central if not counts[t]); central_covered=not uncovered_central
     sufficient=len(matched)>=2 and central_covered and active and related and has_test and not omitted

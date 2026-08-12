@@ -153,6 +153,21 @@ test = "tests/test_controlled_reader.py::test_binary_invalid_utf8_and_invalid_bo
 [[acceptance_criteria]]
 id = "AC-48"
 test = "tests/test_controlled_reader.py::test_unreadable_removed_or_changed_file_blocks_atomically"
+[[acceptance_criteria]]
+id = "AC-49"
+test = "tests/test_mission_audit.py::test_every_relationship_has_a_materialized_evidence_region"
+[[acceptance_criteria]]
+id = "AC-50"
+test = "tests/test_mission_audit.py::test_region_limit_drops_relationship_without_provenance_and_marks_omission"
+[[acceptance_criteria]]
+id = "AC-51"
+test = "tests/test_mission_audit.py::test_lexical_selection_expands_literal_internal_import_exactly_one_hop"
+[[acceptance_criteria]]
+id = "AC-52"
+test = "tests/test_mission_audit.py::test_region_limit_drops_relationship_without_provenance_and_marks_omission"
+[[acceptance_criteria]]
+id = "AC-53"
+test = "tests/test_mission_audit.py::test_mission_pack_is_consumed_directly_by_hermes_0010"
 +++
 
 # HERMES-0009 — Auditoria dirigida por missão e Evidence Pack read-only
@@ -468,6 +483,13 @@ Uma relação possui origem, destino, kind, região de evidência e reason. Sím
 ambíguo não gera relação. `layer_convention` nunca existe sozinho: referencia a
 relação import/symbol que o sustenta.
 
+Toda `evidence_region` referencia uma região materializada no mesmo Evidence
+Pack, no mesmo path e cobrindo a linha indicada. Para imports e demais relações
+estruturais, a região mínima de uma linha que prova a relação participa da
+seleção como parte atômica da relationship. Os caps de região permanecem
+fechados: quando impedirem essa materialização, a relationship é omitida, a
+omissão é registrada e o pack fica insuficiente.
+
 A expansão do grafo é de um único hop a partir dos arquivos-semente. Não há
 travessia recursiva.
 
@@ -743,6 +765,8 @@ classificar papéis por convenções fechadas
 ```text
 ordenar candidatos por score e desempate ordinal
 aplicar caps analíticos
+priorizar, dentro dos mesmos caps, regiões mínimas exigidas por relações
+remover toda relação cuja região, origem ou destino não esteja no pack final
 SE algum cap omitir candidato:
     registrar limitação
     marcar insuficiente
@@ -856,6 +880,15 @@ NUNCA concluir bug, vulnerabilidade ou correção
 - **AC-47:** binário, UTF-8 inválido e BOM fora do início bloqueiam atomicamente.
 - **AC-48:** arquivo ilegível, removido ou alterado durante a leitura bloqueia
   atomicamente.
+- **AC-49:** toda relationship referencia uma região materializada que cobre a
+  linha indicada por `evidence_region`.
+- **AC-50:** nenhuma relationship órfã é emitida; cap que impeça sua provenance
+  registra omissão e torna o pack insuficiente.
+- **AC-51:** imports locais continuam expandindo exatamente um hop.
+- **AC-52:** limites de arquivo, região, relationship, símbolo e teste continuam
+  fechados e determinísticos com a seleção atômica de provenance.
+- **AC-53:** HERMES-0010 consome diretamente o `MissionEvidencePack` produzido
+  por `mission-audit`, sem adaptação manual de schema.
 
 ## 20. Matriz AC → Testes
 
@@ -876,6 +909,7 @@ NUNCA concluir bug, vulnerabilidade ou correção
 | 45 | aceitação real | execução manual registrada | Lucre Agro |
 | 46 | integração | `test_mission_audit_integration.py` | target inválido/precedência |
 | 47–48 | segurança | `test_controlled_reader.py` | encoding, binário e estabilidade |
+| 49–53 | regressão | `test_mission_audit.py` | provenance, one-hop, caps e consumo HERMES-0010 |
 
 Os nomes exatos de testes estão no front matter. AC-45 possui justificativa
 explícita por depender de clone externo e revisão humana.
@@ -1082,3 +1116,4 @@ Nesta fase não existe implementação nem evidência operacional.
 | Data | Autor | Alteração | Referência |
 |---|---|---|---|
 | 2026-08-11 | Codex | Rascunho inicial da HERMES-0009 para revisão antes de implementação | Solicitação de auditoria dirigida por missão |
+| 2026-08-11 | Codex | Compatibilidade referencial integral com HERMES-0010 e provenance atômica sob caps | Dogfooding HERMES-0009/0010 |
