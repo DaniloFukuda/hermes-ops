@@ -73,3 +73,25 @@ class AnalysisError(HermesOpsError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+class ExecutionBudgetError(HermesOpsError):
+    """The pure execution budget contract was used with invalid inputs."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+class ExecutionBudgetExceeded(ExecutionBudgetError):
+    """An action would exceed the absolute execution budget."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__("EXECUTION_BUDGET_EXCEEDED", message)
+
+
+class ExecutionBudgetReserved(ExecutionBudgetError):
+    """An action would consume units reserved for a later category."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__("EXECUTION_BUDGET_RESERVED", message)
