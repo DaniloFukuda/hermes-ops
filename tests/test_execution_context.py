@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 from hermes_ops.core.errors import (
+    CheckpointRequired,
     ExecutionBudgetExceeded,
     ExecutionBudgetReserved,
     SkillExecutionError,
@@ -344,7 +345,7 @@ def test_checkpoint_transition_propagates_reserved_error() -> None:
         context.can_start(ExecutionCategory.IMPLEMENTATION)
         is BudgetDecision.CHECKPOINT_REQUIRED
     )
-    with pytest.raises(ExecutionBudgetReserved, match="checkpoint"):
+    with pytest.raises(CheckpointRequired, match="checkpoint"):
         context.consume(ExecutionCategory.IMPLEMENTATION)
     assert context.budget.used_units == 5
 

@@ -9,6 +9,7 @@ import subprocess
 import pytest
 
 from hermes_ops.core.errors import (
+    CheckpointRequired,
     ExecutionBudgetError,
     ExecutionBudgetExceeded,
     ExecutionBudgetReserved,
@@ -128,7 +129,7 @@ def test_checkpoint_threshold_stops_later_exploration() -> None:
         reached.can_start(ExecutionCategory.IMPLEMENTATION)
         is BudgetDecision.CHECKPOINT_REQUIRED
     )
-    with pytest.raises(ExecutionBudgetReserved, match="checkpoint"):
+    with pytest.raises(CheckpointRequired, match="checkpoint"):
         reached.consume(ExecutionCategory.EXPLORATION)
 
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 from enum import Enum
 
 from hermes_ops.core.errors import (
+    CheckpointRequired,
     ExecutionBudgetError,
     ExecutionBudgetExceeded,
     ExecutionBudgetReserved,
@@ -147,7 +148,7 @@ class ExecutionBudget:
                 "Action would consume units reserved for a later category"
             )
         if decision is BudgetDecision.CHECKPOINT_REQUIRED:
-            raise ExecutionBudgetReserved(
+            raise CheckpointRequired(
                 "Exploration is stopped at the checkpoint threshold"
             )
         return replace(self, used_units=self.used_units + units)

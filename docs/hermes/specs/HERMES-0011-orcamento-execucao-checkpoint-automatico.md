@@ -135,6 +135,30 @@ test = "tests/test_execution_context.py::test_reserved_transition_propagates_err
 [[acceptance_criteria]]
 id = "AC-42"
 test = "tests/test_execution_context.py::test_exhausted_transition_propagates_error_without_changing_context"
+[[acceptance_criteria]]
+id = "AC-43"
+test = "tests/test_budgeted_process.py::test_allowed_consumes_before_one_process_call"
+[[acceptance_criteria]]
+id = "AC-44"
+test = "tests/test_budgeted_process.py::test_warning_consumes_and_executes"
+[[acceptance_criteria]]
+id = "AC-45"
+test = "tests/test_budgeted_process.py::test_checkpoint_required_blocks_before_process"
+[[acceptance_criteria]]
+id = "AC-46"
+test = "tests/test_budgeted_process.py::test_reserved_blocks_before_process"
+[[acceptance_criteria]]
+id = "AC-47"
+test = "tests/test_budgeted_process.py::test_exhausted_blocks_before_process"
+[[acceptance_criteria]]
+id = "AC-48"
+test = "tests/test_budgeted_process.py::test_units_and_explicit_category_are_preserved"
+[[acceptance_criteria]]
+id = "AC-49"
+test = "tests/test_budgeted_process.py::test_failed_process_keeps_consumed_context_and_failure_result"
+[[acceptance_criteria]]
+id = "AC-50"
+test = "tests/test_budgeted_process.py::test_legacy_run_process_contract_is_unchanged"
 +++
 
 # HERMES-0011 — Orçamento de Execução e Checkpoint Automático
@@ -375,6 +399,25 @@ Se a decisão resultar em reserva, checkpoint obrigatório ou exaustão,
 começar e `context_before` permanece válido. A fase 0011C define somente esse
 contrato e não o aplica em `run_skill`, dispatcher, handlers, processos ou
 leitores.
+
+### Primeira borda real — fase HERMES-0011D
+
+`run_process` permanece inalterado. A nova função
+`run_process_with_context` recebe `ExecutionContext`, categoria explícita e
+custo, além dos argumentos legados. Ela não infere política do comando e retorna
+`BudgetedProcessResult`, contendo o `ProcessResult` legado e o contexto válido
+após a tentativa.
+
+A ordem normativa é: consultar `can_start`; bloquear decisões impeditivas;
+consumir e obter contexto N+1; somente então chamar `run_process`. `ALLOWED` e
+`WARNING` executam. `CHECKPOINT_REQUIRED`, `RESERVED` e `EXHAUSTED` lançam seus
+erros específicos antes do subprocesso e preservam o contexto N.
+
+O budget mede a tentativa. Depois de autorizado e consumido, retorno diferente
+de zero, timeout, executável ausente ou outra falha representada por
+`ProcessResult` não desfaz o consumo. O resultado budget-aware sempre conserva
+o contexto N+1 ao lado da falha. A fase não adota a nova borda em nenhum caller
+de produção.
 
 ### ExecutionBudget
 
@@ -728,6 +771,16 @@ COMEÇAR pelo próximo passo recomendado, sujeito à política e ao novo budget
   e não altera o contexto anterior.
 - **AC-42:** limite absoluto propaga `ExecutionBudgetExceeded` e não altera o
   contexto anterior.
+- **AC-43:** decisão ALLOWED consome antes e chama o processo exatamente uma vez.
+- **AC-44:** decisão WARNING também consome e executa, sem criar checkpoint.
+- **AC-45:** CHECKPOINT_REQUIRED usa erro próprio e bloqueia antes do efeito.
+- **AC-46:** RESERVED bloqueia antes do efeito e preserva o contexto anterior.
+- **AC-47:** EXHAUSTED bloqueia antes do efeito e preserva o contexto anterior.
+- **AC-48:** categoria e custo são explícitos e chegam intactos ao domínio.
+- **AC-49:** falha do processo permanece visível e conserva o contexto já
+  consumido.
+- **AC-50:** assinatura, retorno e comportamento do `run_process` legado não
+  mudam.
 
 ## Plano de Testes
 
@@ -743,6 +796,7 @@ COMEÇAR pelo próximo passo recomendado, sujeito à política e ao novo budget
 | AC-13, AC-30 | regressão | `tests/test_execution_regression.py` | CLI/config/skills/Git existentes |
 | AC-31–AC-37 | unitário/integração | `tests/test_execution_context.py` | contexto, transporte sem consumo e compatibilidade |
 | AC-38–AC-42 | unitário | `tests/test_execution_context.py` | transições imutáveis, decisões e erros preservados |
+| AC-43–AC-50 | unitário/integração | `tests/test_budgeted_process.py` | autorização, consumo anterior ao efeito e compatibilidade |
 
 Cada teste novo deve citar `Spec: HERMES-0011 / AC-XX`. AC-29 compõe a tríade
 de segurança: comportamento permitido (metadados sanitizados), bloqueado
@@ -910,9 +964,9 @@ sentido depois que o núcleo possui enforcement.
 ## Evidências da Implementação
 
 Implementação parcial das fases 0011A (domínio puro), 0011B (transporte de
-contexto) e 0011C (transição imutável). O status permanece `Rascunho` porque
-defaults, configuração, journal, checkpoint, enforcement e instrumentação
-continuam abertos.
+contexto), 0011C (transição imutável) e 0011D (primeira borda isolada). O status
+permanece `Rascunho` porque defaults, configuração, journal, checkpoint e adoção
+pelos callers continuam abertos.
 
 | Campo | Valor |
 |---|---|
@@ -920,8 +974,11 @@ continuam abertos.
 | Testes ExecutionContext | `.venv\\Scripts\\python.exe -m pytest tests/test_execution_context.py -q` → `17 passed` |
 | Budget + contexto | `.venv\\Scripts\\python.exe -m pytest tests/test_execution_budget.py tests/test_execution_context.py -q` → `44 passed` |
 | Regressão do executor 0011C | `.venv\\Scripts\\python.exe -m pytest tests/test_skill_execution.py -q --basetemp <TEMP>` → `54 passed` |
+| Borda budget-aware | `.venv\\Scripts\\python.exe -m pytest tests/test_budgeted_process.py -q --basetemp <TEMP>` → `10 passed` |
+| Budget + contexto + borda | `.venv\\Scripts\\python.exe -m pytest tests/test_execution_budget.py tests/test_execution_context.py tests/test_budgeted_process.py -q --basetemp <TEMP>` → `54 passed` |
+| Regressão de processes | `.venv\\Scripts\\python.exe -m pytest tests/test_processes.py -q --basetemp <TEMP>` → `9 passed` |
 | Regressões de skills | `.venv\\Scripts\\python.exe -m pytest tests/test_skill_execution.py tests/test_skill_registry.py tests/test_skill_policy.py -q --basetemp <TEMP>` → `162 passed, 6 skipped` |
-| Suíte completa | `.venv\\Scripts\\python.exe -m pytest -q --basetemp <TEMP>` → `542 passed, 11 skipped` |
+| Suíte completa | `.venv\\Scripts\\python.exe -m pytest -q --basetemp <TEMP>` → `552 passed, 11 skipped` |
 | compileall | `.venv\\Scripts\\python.exe -m compileall src` → OK |
 | Limitações | primeira execução completa terminou no teardown do pytest por `WinError 5`; repetição com basetemp isolado passou |
 
@@ -933,3 +990,4 @@ continuam abertos.
 | 2026-08-12 | Codex | Desambiguou thresholds/reservas/categorias e implementou somente o domínio puro | Fase HERMES-0011A |
 | 2026-08-12 | Codex | Adicionou contexto mínimo e transporte até o dispatcher, sem consumo | Fase HERMES-0011B |
 | 2026-08-12 | Codex | Formalizou transição contexto N → N+1 sem instrumentar efeitos | Fase HERMES-0011C |
+| 2026-08-12 | Codex | Adicionou primeira borda budget-aware isolada sobre subprocesso | Fase HERMES-0011D |

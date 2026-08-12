@@ -95,3 +95,10 @@ class ExecutionBudgetReserved(ExecutionBudgetError):
 
     def __init__(self, message: str) -> None:
         super().__init__("EXECUTION_BUDGET_RESERVED", message)
+
+
+class CheckpointRequired(ExecutionBudgetError):
+    """Exploration must stop so execution can prepare safe closure."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__("EXECUTION_CHECKPOINT_REQUIRED", message)
