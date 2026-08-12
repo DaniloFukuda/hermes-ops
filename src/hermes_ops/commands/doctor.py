@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 import shutil
 
@@ -17,10 +18,17 @@ from hermes_ops.core.errors import (
 from hermes_ops.core.paths import resolve_directory
 from hermes_ops.core.platform_info import current_platform, python_is_compatible
 from hermes_ops.core.results import CheckResult, Report, Status
-from hermes_ops.git.inspector import GitInspector, OPTIONAL_GIT_WARNING_CODES
+from hermes_ops.git.inspector import GitInspector, GitState, OPTIONAL_GIT_WARNING_CODES
 
 
 def run_doctor(project: str | Path) -> Report:
+    return _run_doctor(project, lambda root: GitInspector().inspect(root))
+
+
+def _run_doctor(
+    project: str | Path,
+    inspect_git: Callable[[Path], GitState],
+) -> Report:
     results: list[CheckResult] = []
     try:
         supplied = resolve_directory(project)
@@ -180,7 +188,7 @@ def run_doctor(project: str | Path) -> Report:
             "ok" if git_path else "git_unavailable",
         )
     )
-    state = GitInspector().inspect(root)
+    state = inspect_git(root)
     if state.error:
         if not config.git.required and state.error_code in OPTIONAL_GIT_WARNING_CODES:
             git_status = Status.WARNING

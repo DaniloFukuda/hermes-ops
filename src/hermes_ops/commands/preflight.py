@@ -1,18 +1,61 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
-from hermes_ops.commands.doctor import run_doctor
+from hermes_ops.commands.doctor import _run_doctor, run_doctor
 from hermes_ops.commands.worktree import run_worktree
 from hermes_ops.core.configuration import load_project_config
 from hermes_ops.core.errors import ConfigurationError, PathResolutionError
 from hermes_ops.core.paths import resolve_directory
 from hermes_ops.core.results import CheckResult, Report, Status
+from hermes_ops.execution import ExecutionCategory, ExecutionContext
+from hermes_ops.git.inspector import GitInspector
 from hermes_ops.git.inspector import OPTIONAL_GIT_WARNING_CODES
 
 
 def run_preflight(project: str | Path) -> Report:
-    doctor = run_doctor(project)
+    return _run_preflight(project, run_doctor)
+
+
+@dataclass(frozen=True, slots=True)
+class BudgetedPreflightResult:
+    report: Report
+    execution_context: ExecutionContext
+
+
+def run_preflight_with_context(
+    project: str | Path,
+    execution_context: ExecutionContext,
+    category: ExecutionCategory,
+) -> BudgetedPreflightResult:
+    current_context = execution_context
+
+    def budgeted_doctor(target: str | Path) -> Report:
+        nonlocal current_context
+
+        def inspect_git(root: Path):
+            nonlocal current_context
+            inspection = GitInspector().inspect_with_context(
+                root,
+                current_context,
+                category,
+            )
+            current_context = inspection.execution_context
+            return inspection.state
+
+        return _run_doctor(target, inspect_git)
+
+    report = _run_preflight(project, budgeted_doctor)
+    return BudgetedPreflightResult(report, current_context)
+
+
+def _run_preflight(
+    project: str | Path,
+    doctor_runner: Callable[[str | Path], Report],
+) -> Report:
+    doctor = doctor_runner(project)
     results = list(doctor.results)
     if doctor.exit_code in {2, 3, 4}:
         return Report.from_results("preflight", results)

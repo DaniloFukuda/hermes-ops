@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from hermes_ops.commands.preflight import run_preflight
+from hermes_ops.commands.preflight import run_preflight, run_preflight_with_context
 from hermes_ops.core.errors import PathResolutionError, SkillExecutionError
 from hermes_ops.core.paths import resolve_directory
 from hermes_ops.core.results import Report
-from hermes_ops.execution import ExecutionContext
+from hermes_ops.execution import ExecutionCategory, ExecutionContext
 from hermes_ops.skills.catalog import resolve_own_skill_catalog
 from hermes_ops.skills.code_audit import run_code_audit, validate_code_audit_target
 from hermes_ops.skills.execution_models import (
@@ -59,6 +60,29 @@ def _run_git_preflight(target_project: str | Path) -> SkillExecutionResult:
     return _build_execution_result("git-preflight", report)
 
 
+@dataclass(frozen=True, slots=True)
+class BudgetedSkillExecutionResult:
+    skill_result: SkillExecutionResult
+    execution_context: ExecutionContext
+
+
+def _run_git_preflight_with_context(
+    target_project: str | Path,
+    execution_context: ExecutionContext,
+    category: ExecutionCategory,
+) -> BudgetedSkillExecutionResult:
+    preflight = run_preflight_with_context(
+        target_project,
+        execution_context,
+        category,
+    )
+    skill_result = _build_execution_result("git-preflight", preflight.report)
+    return BudgetedSkillExecutionResult(
+        skill_result,
+        preflight.execution_context,
+    )
+
+
 def _dispatch_skill(
     plan: SkillPlan,
     target_project: str | Path,
@@ -79,6 +103,26 @@ def _dispatch_skill(
     raise SkillExecutionError(
         "SKILL_EXECUTION_NOT_SUPPORTED",
         f"Skill '{plan.skills[0].id}' has no execution handler",
+    )
+
+
+def _dispatch_skill_with_context(
+    plan: SkillPlan,
+    target_project: str | Path,
+    execution_context: ExecutionContext,
+    category: ExecutionCategory,
+) -> BudgetedSkillExecutionResult:
+    if type(plan) is not SkillPlan or len(plan.skills) != 1:
+        _invalid("Execution requires an approved unitary SkillPlan")
+    if plan.skills[0].id != "git-preflight":
+        raise SkillExecutionError(
+            "SKILL_EXECUTION_NOT_SUPPORTED",
+            f"Skill '{plan.skills[0].id}' has no budget-aware execution handler",
+        )
+    return _run_git_preflight_with_context(
+        target_project,
+        execution_context,
+        category,
     )
 
 
@@ -148,4 +192,33 @@ def run_skill(
         catalog_root,
         inputs,
         execution_context=execution_context,
+    )
+
+
+def run_skill_with_context(
+    project_root: Any,
+    skill_id: Any,
+    policy: Any,
+    *,
+    execution_context: ExecutionContext,
+    category: ExecutionCategory,
+) -> BudgetedSkillExecutionResult:
+    if project_root is None or type(skill_id) is not str or type(policy) is not SkillPolicy:
+        _invalid("Execution requires an explicit project root, skill id, and SkillPolicy")
+    _validate_execution_context(execution_context)
+    try:
+        target_project = resolve_directory(project_root)
+    except PathResolutionError as exc:
+        raise SkillExecutionError(
+            "SKILL_TARGET_INVALID",
+            "The explicit target project is not a valid directory",
+        ) from exc
+    catalog_root = resolve_own_skill_catalog()
+    registry = discover_skills(catalog_root)
+    plan = plan_skills(registry, (skill_id,), policy)
+    return _dispatch_skill_with_context(
+        plan,
+        target_project,
+        execution_context,
+        category,
     )

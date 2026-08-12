@@ -159,6 +159,36 @@ test = "tests/test_budgeted_process.py::test_failed_process_keeps_consumed_conte
 [[acceptance_criteria]]
 id = "AC-50"
 test = "tests/test_budgeted_process.py::test_legacy_run_process_contract_is_unchanged"
+[[acceptance_criteria]]
+id = "AC-51"
+test = "tests/test_budgeted_skill_execution.py::test_legacy_and_budgeted_git_preflight_are_functionally_equivalent"
+[[acceptance_criteria]]
+id = "AC-52"
+test = "tests/test_budgeted_skill_execution.py::test_context_after_returns_to_public_budgeted_api"
+[[acceptance_criteria]]
+id = "AC-53"
+test = "tests/test_budgeted_skill_execution.py::test_warning_executes_and_returns_advanced_context"
+[[acceptance_criteria]]
+id = "AC-54"
+test = "tests/test_budgeted_skill_execution.py::test_budget_refusals_block_before_any_process"
+[[acceptance_criteria]]
+id = "AC-55"
+test = "tests/test_budgeted_skill_execution.py::test_budget_refusals_block_before_any_process"
+[[acceptance_criteria]]
+id = "AC-56"
+test = "tests/test_budgeted_skill_execution.py::test_budget_refusals_block_before_any_process"
+[[acceptance_criteria]]
+id = "AC-57"
+test = "tests/test_budgeted_skill_execution.py::test_failed_probe_keeps_consumption_and_is_not_masked"
+[[acceptance_criteria]]
+id = "AC-58"
+test = "tests/test_budgeted_skill_execution.py::test_only_git_preflight_has_budgeted_handler"
+[[acceptance_criteria]]
+id = "AC-59"
+test = "tests/test_budgeted_skill_execution.py::test_budgeted_path_does_not_add_duplicate_probe_or_process"
+[[acceptance_criteria]]
+id = "AC-60"
+test = "tests/test_budgeted_skill_execution.py::test_inspector_variants_each_execute_selected_probe_once"
 +++
 
 # HERMES-0011 — Orçamento de Execução e Checkpoint Automático
@@ -418,6 +448,39 @@ de zero, timeout, executável ausente ou outra falha representada por
 `ProcessResult` não desfaz o consumo. O resultado budget-aware sempre conserva
 o contexto N+1 ao lado da falha. A fase não adota a nova borda em nenhum caller
 de produção.
+
+### Primeiro caminho de produção — fase HERMES-0011E
+
+O único caller direto encontrado foi `GitInspector`. A primeira adoção escolhe
+somente sua probe read-only `git rev-parse --is-inside-work-tree`, protegida
+pelos mesmos argumentos Git, ambiente neutralizado e timeout do inspector. A
+API exige categoria explícita; o uso normal e semanticamente recomendado para
+essa pré-condição é `ExecutionCategory.VALIDATION`. A probe custa uma unidade
+lógica. Esse custo não representa o limite externo 32/32.
+
+O caminho é:
+
+```text
+run_skill_with_context
+    → _dispatch_skill_with_context
+        → _run_git_preflight_with_context
+            → GitInspector.probe_with_context
+                → run_process_with_context
+            → handler git-preflight legado, somente após probe bem-sucedida
+    → BudgetedSkillExecutionResult(skill_result, context_after)
+```
+
+`run_skill` e `GitInspector.inspect` permanecem legados. A variante
+`inspect_with_context` compartilha toda a lógica de inspeção e substitui somente
+a probe existente; ela não executa uma probe preliminar. No preflight completo,
+a inspeção do doctor usa essa variante e a inspeção do worktree continua
+legada. Assim, não há subprocesso adicional: apenas uma das probes preexistentes
+é contabilizada. Os demais subprocessos continuam fora do budget nesta fase.
+
+A API paralela evita retorno condicional e impede a perda de `context_after`.
+Nenhuma outra skill possui handler budget-aware. Se a probe falhar após começar,
+o consumo permanece e a falha vira evidência funcional da skill; o restante do
+preflight respeita o retorno antecipado já existente.
 
 ### ExecutionBudget
 
@@ -781,6 +844,21 @@ COMEÇAR pelo próximo passo recomendado, sujeito à política e ao novo budget
   consumido.
 - **AC-50:** assinatura, retorno e comportamento do `run_process` legado não
   mudam.
+- **AC-51:** git-preflight legado e budget-aware produzem resultado funcional
+  equivalente quando a probe é permitida.
+- **AC-52:** a API externa budget-aware devolve contexto N+1 sem alterar N.
+- **AC-53:** WARNING executa e devolve o contexto avançado.
+- **AC-54:** CHECKPOINT_REQUIRED bloqueia antes de qualquer subprocesso.
+- **AC-55:** RESERVED bloqueia antes de qualquer subprocesso.
+- **AC-56:** EXHAUSTED bloqueia antes de qualquer subprocesso.
+- **AC-57:** falha da probe conserva consumo e não é mascarada pelo handler
+  legado.
+- **AC-58:** somente git-preflight possui handler budget-aware; demais skills e
+  `run_skill` permanecem legados.
+- **AC-59:** o caminho budget-aware executa o mesmo número total de probes e
+  subprocessos que o caminho legado equivalente.
+- **AC-60:** cada variante individual do inspector executa a probe selecionada
+  exatamente uma vez; somente a variante budget-aware consome uma unidade.
 
 ## Plano de Testes
 
@@ -797,6 +875,8 @@ COMEÇAR pelo próximo passo recomendado, sujeito à política e ao novo budget
 | AC-31–AC-37 | unitário/integração | `tests/test_execution_context.py` | contexto, transporte sem consumo e compatibilidade |
 | AC-38–AC-42 | unitário | `tests/test_execution_context.py` | transições imutáveis, decisões e erros preservados |
 | AC-43–AC-50 | unitário/integração | `tests/test_budgeted_process.py` | autorização, consumo anterior ao efeito e compatibilidade |
+| AC-51–AC-58 | integração/regressão | `tests/test_budgeted_skill_execution.py` | primeiro caminho real e retorno do contexto |
+| AC-59–AC-60 | caracterização/regressão | `tests/test_budgeted_skill_execution.py` | ausência de probe e subprocesso duplicados |
 
 Cada teste novo deve citar `Spec: HERMES-0011 / AC-XX`. AC-29 compõe a tríade
 de segurança: comportamento permitido (metadados sanitizados), bloqueado
@@ -964,9 +1044,9 @@ sentido depois que o núcleo possui enforcement.
 ## Evidências da Implementação
 
 Implementação parcial das fases 0011A (domínio puro), 0011B (transporte de
-contexto), 0011C (transição imutável) e 0011D (primeira borda isolada). O status
-permanece `Rascunho` porque defaults, configuração, journal, checkpoint e adoção
-pelos callers continuam abertos.
+contexto), 0011C (transição imutável), 0011D (primeira borda isolada) e 0011E
+(primeiro caminho de produção). O status permanece `Rascunho` porque defaults,
+configuração, journal, checkpoint e adoção ampla continuam abertos.
 
 | Campo | Valor |
 |---|---|
@@ -977,8 +1057,11 @@ pelos callers continuam abertos.
 | Borda budget-aware | `.venv\\Scripts\\python.exe -m pytest tests/test_budgeted_process.py -q --basetemp <TEMP>` → `10 passed` |
 | Budget + contexto + borda | `.venv\\Scripts\\python.exe -m pytest tests/test_execution_budget.py tests/test_execution_context.py tests/test_budgeted_process.py -q --basetemp <TEMP>` → `54 passed` |
 | Regressão de processes | `.venv\\Scripts\\python.exe -m pytest tests/test_processes.py -q --basetemp <TEMP>` → `9 passed` |
+| Caminho git-preflight budget-aware | `.venv\\Scripts\\python.exe -m pytest tests/test_budgeted_skill_execution.py -q --basetemp <TEMP>` → `11 passed` |
+| Budget e caminho completo | `.venv\\Scripts\\python.exe -m pytest tests/test_execution_budget.py tests/test_execution_context.py tests/test_budgeted_process.py tests/test_budgeted_skill_execution.py -q --basetemp <TEMP>` → `65 passed` |
+| Regressões do caminho escolhido | `.venv\\Scripts\\python.exe -m pytest tests/test_git_inspector.py tests/test_preflight.py tests/test_skill_execution.py tests/test_budgeted_skill_execution.py -q --basetemp <TEMP>` → `87 passed` |
 | Regressões de skills | `.venv\\Scripts\\python.exe -m pytest tests/test_skill_execution.py tests/test_skill_registry.py tests/test_skill_policy.py -q --basetemp <TEMP>` → `162 passed, 6 skipped` |
-| Suíte completa | `.venv\\Scripts\\python.exe -m pytest -q --basetemp <TEMP>` → `552 passed, 11 skipped` |
+| Suíte completa | `.venv\\Scripts\\python.exe -m pytest -q --basetemp <TEMP>` → `563 passed, 11 skipped` |
 | compileall | `.venv\\Scripts\\python.exe -m compileall src` → OK |
 | Limitações | primeira execução completa terminou no teardown do pytest por `WinError 5`; repetição com basetemp isolado passou |
 
@@ -991,3 +1074,5 @@ pelos callers continuam abertos.
 | 2026-08-12 | Codex | Adicionou contexto mínimo e transporte até o dispatcher, sem consumo | Fase HERMES-0011B |
 | 2026-08-12 | Codex | Formalizou transição contexto N → N+1 sem instrumentar efeitos | Fase HERMES-0011C |
 | 2026-08-12 | Codex | Adicionou primeira borda budget-aware isolada sobre subprocesso | Fase HERMES-0011D |
+| 2026-08-12 | Codex | Adotou uma probe Git read-only no caminho git-preflight | Fase HERMES-0011E |
+| 2026-08-12 | Codex | Substituiu a probe existente sem adicionar subprocesso | Correção HERMES-0011E |

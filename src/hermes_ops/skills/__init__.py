@@ -17,7 +17,11 @@ from hermes_ops.skills.code_audit import (
     CodeAuditSeverity,
     CodeAuditSummary,
 )
-from hermes_ops.skills.executor import run_skill
+from hermes_ops.skills.executor import (
+    BudgetedSkillExecutionResult,
+    run_skill,
+    run_skill_with_context,
+)
 from hermes_ops.skills.loader import load_skill
 from hermes_ops.skills.models import SkillDefinition, SkillRisk, SkillStatus
 from hermes_ops.skills.policy import SkillPlan, SkillPolicy, plan_skills
@@ -31,6 +35,7 @@ __all__ = (
     "CodeAuditRegion",
     "CodeAuditSeverity",
     "CodeAuditSummary",
+    "BudgetedSkillExecutionResult",
     "SkillDefinition",
     "SkillExecutionError",
     "SkillExecutionEvidence",
@@ -48,4 +53,5 @@ __all__ = (
     "load_skill",
     "plan_skills",
     "run_skill",
+    "run_skill_with_context",
 )

@@ -5,7 +5,13 @@ from pathlib import Path
 import re
 from typing import Callable
 
-from hermes_ops.core.processes import ProcessResult, run_process
+from hermes_ops.core.processes import (
+    BudgetedProcessResult,
+    ProcessResult,
+    run_process,
+    run_process_with_context,
+)
+from hermes_ops.execution import ExecutionCategory, ExecutionContext
 from hermes_ops.core.paths import (
     direct_project_path,
     is_indirect_path,
@@ -47,6 +53,18 @@ class GitState:
         return self.changes.clean
 
 
+@dataclass(frozen=True, slots=True)
+class BudgetedGitProbeResult:
+    process_result: ProcessResult
+    execution_context: ExecutionContext
+
+
+@dataclass(frozen=True, slots=True)
+class BudgetedGitInspectionResult:
+    state: GitState
+    execution_context: ExecutionContext
+
+
 class GitInspector:
     def __init__(
         self,
@@ -60,6 +78,33 @@ class GitInspector:
         self.runner = runner
 
     def inspect(self, project: Path) -> GitState:
+        return self._inspect(
+            project,
+            lambda cwd: self._run(cwd, "rev-parse", "--is-inside-work-tree"),
+        )
+
+    def inspect_with_context(
+        self,
+        project: Path,
+        execution_context: ExecutionContext,
+        category: ExecutionCategory,
+    ) -> BudgetedGitInspectionResult:
+        current_context = execution_context
+
+        def budgeted_probe(cwd: Path) -> ProcessResult:
+            nonlocal current_context
+            result = self.probe_with_context(cwd, current_context, category)
+            current_context = result.execution_context
+            return result.process_result
+
+        state = self._inspect(project, budgeted_probe)
+        return BudgetedGitInspectionResult(state, current_context)
+
+    def _inspect(
+        self,
+        project: Path,
+        probe_runner: Callable[[Path], ProcessResult],
+    ) -> GitState:
         try:
             declared_root = project.resolve(strict=True)
         except (OSError, RuntimeError):
@@ -83,7 +128,7 @@ class GitInspector:
         unsafe_config = self._unsafe_local_config(declared_root)
         if unsafe_config is not None:
             return unsafe_config
-        probe = self._run(project, "rev-parse", "--is-inside-work-tree")
+        probe = probe_runner(project)
         if not probe.started:
             return GitState(
                 False,
@@ -182,6 +227,34 @@ class GitInspector:
             has_commits=has_commits,
             detached=detached,
             changes=changes,
+        )
+
+    def probe_with_context(
+        self,
+        project: Path,
+        execution_context: ExecutionContext,
+        category: ExecutionCategory,
+    ) -> BudgetedGitProbeResult:
+        result: BudgetedProcessResult = run_process_with_context(
+            (
+                self.executable,
+                "-c",
+                "core.fsmonitor=false",
+                "-c",
+                "core.autocrlf=input",
+                "rev-parse",
+                "--is-inside-work-tree",
+            ),
+            cwd=project,
+            timeout=self.timeout,
+            env=safe_git_environment(),
+            execution_context=execution_context,
+            category=category,
+            units=1,
+        )
+        return BudgetedGitProbeResult(
+            result.process_result,
+            result.execution_context,
         )
 
     def _run(self, cwd: Path, *args: str) -> ProcessResult:
