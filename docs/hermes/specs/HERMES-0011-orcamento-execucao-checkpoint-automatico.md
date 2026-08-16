@@ -68,10 +68,10 @@ id = "AC-19"
 test = "tests/test_execution_checkpoint.py::test_checkpoint_contains_required_traceable_fields"
 [[acceptance_criteria]]
 id = "AC-20"
-test = "tests/test_execution_checkpoint.py::test_checkpoint_json_and_markdown_are_deterministic_with_injected_clock"
+test = "tests/test_execution_checkpoint.py::test_checkpoint_json_and_markdown_are_deterministic"
 [[acceptance_criteria]]
 id = "AC-21"
-test = "tests/test_execution_checkpoint.py::test_checkpoint_generation_runs_no_subprocess_and_writes_no_file"
+test = "tests/test_execution_checkpoint.py::test_checkpoint_generation_has_no_external_effects"
 [[acceptance_criteria]]
 id = "AC-22"
 test = "tests/test_execution_integration.py::test_skill_executor_uses_one_execution_context_across_all_phases"
@@ -189,16 +189,47 @@ test = "tests/test_budgeted_skill_execution.py::test_budgeted_path_does_not_add_
 [[acceptance_criteria]]
 id = "AC-60"
 test = "tests/test_budgeted_skill_execution.py::test_inspector_variants_each_execute_selected_probe_once"
+[[acceptance_criteria]]
+id = "AC-61"
+test = "tests/test_execution_checkpoint.py::test_checkpoint_contains_required_traceable_fields"
+[[acceptance_criteria]]
+id = "AC-62"
+test = "tests/test_execution_checkpoint.py::test_checkpoint_is_frozen_and_deeply_immutable"
+[[acceptance_criteria]]
+id = "AC-63"
+test = "tests/test_execution_checkpoint.py::test_checkpoint_snapshots_budget_without_changing_context"
+[[acceptance_criteria]]
+id = "AC-64"
+test = "tests/test_execution_checkpoint.py::test_checkpoint_json_and_markdown_are_deterministic"
+[[acceptance_criteria]]
+id = "AC-65"
+test = "tests/test_execution_checkpoint.py::test_checkpoint_generation_has_no_external_effects"
+[[acceptance_criteria]]
+id = "AC-66"
+test = "tests/test_execution_checkpoint.py::test_public_handoff_is_sanitized_bounded_and_has_no_sensitive_content"
+[[acceptance_criteria]]
+id = "AC-67"
+test = "tests/test_execution_checkpoint.py::test_all_collections_are_limited_and_report_omissions"
+[[acceptance_criteria]]
+id = "AC-68"
+test = "tests/test_execution_checkpoint.py::test_repository_state_is_optional_and_unknown_is_not_collected"
+[[acceptance_criteria]]
+id = "AC-69"
+test = "tests/test_execution_checkpoint.py::test_empty_minimum_checkpoint_and_stable_schema"
+[[acceptance_criteria]]
+id = "AC-70"
+test = "tests/test_execution_checkpoint.py::test_checkpoint_with_failures_and_recommended_action"
 +++
 
 # HERMES-0011 — Orçamento de Execução e Checkpoint Automático
 
 ## Status
 
-Rascunho. O domínio puro de `ExecutionBudget` e o transporte explícito de
-`ExecutionContext` estão autorizados e implementados parcialmente. Defaults,
-enforcement, instrumentação, checkpoint, handoff, novas skills e integração com
-contador externo continuam não autorizados por esta fase.
+Rascunho. Os domínios puros de `ExecutionBudget`, `ExecutionContext` e
+`ExecutionCheckpoint`, além da primeira probe de produção budget-aware, estão
+implementados. Defaults, checkpoint automático, persistência, retomada,
+instrumentação adicional, novas skills e integração com contador externo
+continuam não autorizados por esta fase.
 
 ## Resumo para o Responsável pelo Projeto
 
@@ -589,36 +620,46 @@ número mágico. Configuração explícita poderá usar `[execution]` com
 
 ### ExecutionCheckpoint
 
-Dataclass congelada, deeply immutable e serializável, contendo no mínimo:
+Na fase HERMES-0011F, `ExecutionCheckpoint` é um snapshot puro, congelado e
+profundamente imutável. Ele somente organiza valores já presentes no
+`ExecutionContext` ou fornecidos explicitamente pelo chamador. Sua criação não
+executa Git, subprocesso, reader, varredura de filesystem, provider ou rede.
 
-- timestamp UTC obtido de relógio injetado;
-- raiz interna exata e identidade pública sanitizada;
-- branch, HEAD e status sanitizado já observados;
-- objetivo e fase;
-- snapshot do budget;
-- arquivos modificados e arquivos inspecionados;
-- comandos/testes executados e resultados resumidos;
-- falhas conhecidas e itens restantes;
-- próximo passo recomendado;
-- motivo do checkpoint;
-- assinaturas recentes a não repetir.
+O contrato contém `schema_version`, motivo fechado, objetivo, fase, snapshot
+do budget, estado opcional do repositório, arquivos modificados, recursos
+inspecionados, ações e testes resumidos, falhas conhecidas, trabalho restante e
+uma próxima ação recomendada pelo chamador. Não há timestamp automático nem
+outro valor não determinístico.
+
+`BudgetCheckpointSnapshot` copia somente limites, reservas, limiares, unidades
+usadas e saldo. `RepositoryCheckpointState` recebe raiz, branch, HEAD e resumo
+do working tree previamente coletados; todos podem estar explicitamente
+ausentes e nenhuma consulta oportunista é feita.
+
+As coleções são tuplas dentro de `BoundedItems`, limitadas a 50 entradas na
+ordem recebida. Excedentes são truncados deterministicamente e registrados em
+`omitted_count`. Cada texto é limitado a 240 caracteres. Recursos não guardam
+conteúdo completo; ações não guardam payloads; testes não guardam stdout ou
+stderr bruto.
 
 Não contém tokens, variáveis de ambiente, credenciais, conteúdo de `.env`,
-argumentos secretos, dumps completos, stdout/stderr completos ou paths
-absolutos na forma pública. Coleções têm limites explícitos e ordenação
-canônica. O timestamp é o único valor temporal e é controlável em testes.
+headers de autorização, dumps completos ou paths absolutos internos na saída.
+Os valores são sanitizados e limitados antes de serem armazenados, inclusive
+para que `repr` não exponha o material original.
 
 ### Handoff
 
-O checkpoint possui JSON canônico interno e renderização Markdown pública. O
-JSON é o contrato de retomada; Markdown é uma visão humana do mesmo objeto, não
-uma segunda fonte de verdade. A CLI os envia a stdout após `PublicSanitizer`.
-Persistência em arquivo só poderá ocorrer por opção explícita futura e nunca
-dentro do projeto por padrão.
+`to_dict()` oferece somente tipos JSON nativos. `to_json()` usa UTF-8 lógico,
+chaves ordenadas e separadores canônicos; a mesma entrada sempre produz a mesma
+string. `to_markdown()` oferece uma visão humana compacta do mesmo snapshot.
+Nenhum método grava arquivo automaticamente.
 
-Ao retomar, o Hermes valida schema/version, objetivo e identidade do projeto,
-restaura apenas histórico e próxima ação, e cria novo budget. Não reutiliza
-automaticamente resultados se HEAD ou estado observado forem incompatíveis.
+O helper puro `create_execution_checkpoint` copia o budget do contexto sem
+alterá-lo. Nesta fase o checkpoint não é anexado automaticamente ao contexto,
+não é capturado pelo executor e não implementa persistência, loader ou
+`resume()`. `CheckpointRequired` continua significando que a ação solicitada
+não deve começar e que o caller deve preparar o handoff usando somente estado
+já disponível. A retomada será definida em fase posterior.
 
 ## Entradas
 
@@ -801,8 +842,9 @@ COMEÇAR pelo próximo passo recomendado, sujeito à política e ao novo budget
   automaticamente como redundante.
 - **AC-18:** teste repetido sem mudança exige justificativa ou é bloqueado.
 - **AC-19:** checkpoint contém todos os campos mínimos rastreáveis definidos.
-- **AC-20:** com relógio injetado, JSON e Markdown são determinísticos.
-- **AC-21:** checkpoint não inicia subprocesso nem escreve arquivo.
+- **AC-20:** JSON e Markdown são determinísticos sem relógio ou timestamp
+  automático.
+- **AC-21:** checkpoint não inicia subprocesso, Git, filesystem ou rede.
 - **AC-22:** descoberta, planejamento, handler, validação e fechamento usam o
   mesmo contexto explícito.
 - **AC-23:** subprocessos e leitores controlados registram suas ações reais.
@@ -859,6 +901,23 @@ COMEÇAR pelo próximo passo recomendado, sujeito à política e ao novo budget
   subprocessos que o caminho legado equivalente.
 - **AC-60:** cada variante individual do inspector executa a probe selecionada
   exatamente uma vez; somente a variante budget-aware consome uma unidade.
+- **AC-61:** checkpoint contém os campos necessários para handoff sem coletar
+  informação nova.
+- **AC-62:** checkpoint e estruturas aninhadas são profundamente imutáveis e
+  não compartilham listas mutáveis do caller.
+- **AC-63:** budget é copiado para um snapshot seguro sem alterar o contexto.
+- **AC-64:** `to_dict`, JSON canônico e Markdown são determinísticos.
+- **AC-65:** criação e renderização não acessam subprocesso, Git, filesystem ou
+  rede.
+- **AC-66:** JSON, Markdown e `repr` removem segredos sintéticos e paths
+  sensíveis antes de qualquer exposição.
+- **AC-67:** todas as coleções e mensagens possuem limites determinísticos e
+  excedentes são indicados por `omitted_count`.
+- **AC-68:** estado do repositório pode estar ausente sem causar coleta
+  oportunista.
+- **AC-69:** checkpoint mínimo vazio é válido e usa `schema_version` estável.
+- **AC-70:** falhas conhecidas e uma única próxima ação fornecida pelo caller
+  são preservadas de forma resumida.
 
 ## Plano de Testes
 
@@ -877,6 +936,7 @@ COMEÇAR pelo próximo passo recomendado, sujeito à política e ao novo budget
 | AC-43–AC-50 | unitário/integração | `tests/test_budgeted_process.py` | autorização, consumo anterior ao efeito e compatibilidade |
 | AC-51–AC-58 | integração/regressão | `tests/test_budgeted_skill_execution.py` | primeiro caminho real e retorno do contexto |
 | AC-59–AC-60 | caracterização/regressão | `tests/test_budgeted_skill_execution.py` | ausência de probe e subprocesso duplicados |
+| AC-61–AC-70 | unitário/segurança | `tests/test_execution_checkpoint.py` | snapshot puro, limites, serialização e handoff sanitizado |
 
 Cada teste novo deve citar `Spec: HERMES-0011 / AC-XX`. AC-29 compõe a tríade
 de segurança: comportamento permitido (metadados sanitizados), bloqueado
@@ -900,8 +960,8 @@ preservação do contrato Git.
 - análise: `tests/test_analysis_*.py` caracteriza orçamento de contexto e borda
   de adapter, mas não orçamento de ações.
 
-Lacunas atuais: não há teste ou código de sessão, journal, retry, ação,
-checkpoint, handoff ou repetição transversal. Não há teste de captura de
+Lacunas atuais: não há teste ou código de sessão, journal, retry, persistência,
+retomada ou repetição transversal. Não há teste de captura de
 `ResourceExhausted`, coerentemente com a ausência dessa integração.
 
 ## Plano de Implementação em Pequenas Fases
@@ -913,8 +973,8 @@ checkpoint, handoff ou repetição transversal. Não há teste de captura de
    configs antigas.
 3. **Journal e repetição:** assinaturas canônicas, `state_revision`, limites e
    testes de deduplicação sem cache.
-4. **Checkpoint/handoff:** objeto imutável, JSON/Markdown, sanitização e testes
-   que provem ausência de filesystem, processo e rede.
+4. **Checkpoint/handoff:** concluído na fase HERMES-0011F como snapshot puro,
+   imutável, limitado e sanitizado, sem persistência ou retomada.
 5. **Integração piloto:** um único contexto em `skill run`, começando por
    `git-preflight`, instrumentando `run_process` e leituras necessárias sem
    alterar allowlists.
@@ -949,9 +1009,11 @@ Evolução posterior, fora do escopo. Deve tratar especificação aprovada como
 fonte superior a teste inconsistente e emitir `SPEC_TEST_CONFLICT` ou
 equivalente em vez de alterar produção apenas para deixar o teste verde.
 
-## Arquivos Provavelmente Afetados em Implementação Futura
+## Arquivos Afetados e Provavelmente Afetados em Fases Futuras
 
-- `src/hermes_ops/core/execution.py` (novo domínio);
+- `src/hermes_ops/execution/checkpoint.py` (implementado na 0011F);
+- `src/hermes_ops/execution/__init__.py` (API pública da 0011F);
+- `tests/test_execution_checkpoint.py` (contrato da 0011F);
 - `src/hermes_ops/core/errors.py`;
 - `src/hermes_ops/core/configuration.py`;
 - `src/hermes_ops/core/processes.py`;
@@ -984,12 +1046,14 @@ ações e não deve ser renomeado ou reutilizado.
 | 2026-08-12 | Estado explícito e imutável | Facilita teste, isolamento e retomada | Singleton de sessão |
 | 2026-08-12 | Checkpoint usa fatos já registrados | Garante ausência de mutação/coleta escondida | Rodar Git e reler arquivos no fechamento |
 | 2026-08-12 | JSON é contrato e Markdown é visão | Evita duas fontes de verdade | Handoff somente textual |
+| 2026-08-12 | Checkpoint 0011F é snapshot puro sem timestamp | Mesma entrada produz a mesma saída e nenhuma coleta é escondida | Relógio ou coleta automática |
+| 2026-08-12 | Coleções limitadas a 50 e textos a 240 caracteres | Limites simples, determinísticos e testáveis | Crescimento sem limite |
 | 2026-08-12 | Repetição exata exige justificativa | Regra simples, extensível e auditável | Cache ou similaridade semântica |
 
 ## Decisões Abertas Antes da Aprovação
 
 - valores numéricos dos defaults, após coleta de traces locais;
-- tamanho máximo do journal e de cada coleção do checkpoint;
+- tamanho máximo do journal futuro;
 - allowlist exata de ações de validação e fechamento por comando;
 - forma versionada de fornecer checkpoint anterior à API/CLI;
 - se o primeiro piloto cobre apenas `skill run git-preflight` ou também
@@ -1045,8 +1109,9 @@ sentido depois que o núcleo possui enforcement.
 
 Implementação parcial das fases 0011A (domínio puro), 0011B (transporte de
 contexto), 0011C (transição imutável), 0011D (primeira borda isolada) e 0011E
-(primeiro caminho de produção). O status permanece `Rascunho` porque defaults,
-configuração, journal, checkpoint e adoção ampla continuam abertos.
+(primeiro caminho de produção), além da fase 0011F (checkpoint e handoff puros).
+O status permanece `Rascunho` porque defaults, configuração, journal,
+persistência, retomada e adoção ampla continuam abertos.
 
 | Campo | Valor |
 |---|---|
@@ -1061,7 +1126,9 @@ configuração, journal, checkpoint e adoção ampla continuam abertos.
 | Budget e caminho completo | `.venv\\Scripts\\python.exe -m pytest tests/test_execution_budget.py tests/test_execution_context.py tests/test_budgeted_process.py tests/test_budgeted_skill_execution.py -q --basetemp <TEMP>` → `65 passed` |
 | Regressões do caminho escolhido | `.venv\\Scripts\\python.exe -m pytest tests/test_git_inspector.py tests/test_preflight.py tests/test_skill_execution.py tests/test_budgeted_skill_execution.py -q --basetemp <TEMP>` → `87 passed` |
 | Regressões de skills | `.venv\\Scripts\\python.exe -m pytest tests/test_skill_execution.py tests/test_skill_registry.py tests/test_skill_policy.py -q --basetemp <TEMP>` → `162 passed, 6 skipped` |
-| Suíte completa | `.venv\\Scripts\\python.exe -m pytest -q --basetemp <TEMP>` → `563 passed, 11 skipped` |
+| Checkpoint e handoff 0011F | `.venv\\Scripts\\python.exe -m pytest tests/test_execution_checkpoint.py -q --basetemp <TEMP>` → `16 passed` |
+| Domínios 0011A–0011F | `.venv\\Scripts\\python.exe -m pytest tests/test_execution_budget.py tests/test_execution_context.py tests/test_budgeted_process.py tests/test_budgeted_skill_execution.py tests/test_execution_checkpoint.py -q --basetemp <TEMP>` → `81 passed` |
+| Suíte completa | `.venv\\Scripts\\python.exe -m pytest -q --basetemp <TEMP>` → `579 passed, 11 skipped` |
 | compileall | `.venv\\Scripts\\python.exe -m compileall src` → OK |
 | Limitações | primeira execução completa terminou no teardown do pytest por `WinError 5`; repetição com basetemp isolado passou |
 
@@ -1076,3 +1143,4 @@ configuração, journal, checkpoint e adoção ampla continuam abertos.
 | 2026-08-12 | Codex | Adicionou primeira borda budget-aware isolada sobre subprocesso | Fase HERMES-0011D |
 | 2026-08-12 | Codex | Adotou uma probe Git read-only no caminho git-preflight | Fase HERMES-0011E |
 | 2026-08-12 | Codex | Substituiu a probe existente sem adicionar subprocesso | Correção HERMES-0011E |
+| 2026-08-12 | Codex | Implementou checkpoint puro, limitado e handoff sanitizado em memória | Fase HERMES-0011F |
