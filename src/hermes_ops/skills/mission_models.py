@@ -85,6 +85,7 @@ class MissionEvidencePack:
     unresolved_questions: tuple[str, ...]
     completeness: MissionCompleteness
     limitations: tuple[str, ...]
+    structural_scope: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.schema_version != 1 or self.target != "<PROJECT_ROOT>" or not self.mission:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import ast
 import json
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 import re
 import unicodedata
 from typing import Any
@@ -22,6 +22,79 @@ IMPORT=re.compile(r"^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.]+)|.*?from\s+
 
 def _fail(code:str,message:str)->None: raise SkillExecutionError(code,message)
 def _fold(value:str)->str: return "".join(c for c in unicodedata.normalize("NFKD",value.casefold()) if not unicodedata.combining(c))
+
+
+def normalize_structural_scope(raw_paths: tuple[str, ...], target_root: Path) -> tuple[str, ...]:
+    """Validate and normalize structural scope paths relative to target_root.
+
+    Args:
+        raw_paths: Tuple of raw path strings from CLI (--include-path)
+        target_root: Absolute path to project root
+
+    Returns:
+        Tuple of normalized relative paths (POSIX style, sorted, deduplicated)
+
+    Raises:
+        SkillExecutionError: STRUCTURAL_SCOPE_INVALID_PATH, STRUCTURAL_SCOPE_ESCAPES_TARGET, STRUCTURAL_SCOPE_PATH_NOT_FOUND
+    """
+    if not raw_paths:
+        return ()
+
+    normalized = []
+    for raw_path in raw_paths:
+        # Security validation
+        if not raw_path or raw_path != raw_path.replace("\\", "/") or raw_path.startswith("/") or ".." in raw_path.split("/"):
+            _fail("STRUCTURAL_SCOPE_INVALID_PATH", f"Invalid structural scope path: {raw_path}")
+
+        # Check for control characters
+        if any(ord(c) < 32 for c in raw_path):
+            _fail("STRUCTURAL_SCOPE_INVALID_PATH", f"Structural scope path contains control characters: {raw_path}")
+
+        candidate = target_root / raw_path
+
+        # Ensure candidate is within target_root
+        try:
+            candidate.resolve(strict=False).relative_to(target_root.resolve(strict=True))
+        except ValueError:
+            _fail("STRUCTURAL_SCOPE_ESCAPES_TARGET", f"Structural scope path escapes target: {raw_path}")
+
+        # Path must exist
+        if not candidate.exists():
+            _fail("STRUCTURAL_SCOPE_PATH_NOT_FOUND", f"Structural scope path not found: {raw_path}")
+
+        normalized.append(raw_path)
+
+    # Deduplicate: remove exact duplicates and normalize trailing slashes
+    # Spec: ["src/auth", "src/auth/"] → normalizes to "src/auth"
+    # First normalize trailing slashes: strip them from all paths
+    normalized_no_trailing = [p.rstrip("/") for p in normalized]
+    # Deduplicate: remove exact duplicates, sort lexicographically
+    # Spec: keep both "src/auth" and "src/auth/login.py" as distinct (dir vs file)
+    # But remove redundant parent directories per spec (parent of another path)
+    unique = sorted(set(normalized_no_trailing))
+
+    # Remove redundant parent paths (if a path is a prefix of another, keep the more specific)
+    # Spec: "remover paths que são prefixo de outro (pai redundante)"
+    # Example: ["src/auth", "src/auth/sub"] → keep only "src/auth/sub"
+    # But keep both "src/auth" and "src/auth/login.py" as distinct (dir vs file)
+    final = []
+    for path in unique:
+        is_prefix = False
+        for other in unique:
+            if path != other and other.startswith(path + "/"):
+                # path is a parent of other
+                # Check if path is a directory and other is also a directory (or file)
+                # If both are directories, remove parent (redundant)
+                # If path is dir and other is file, keep both per spec
+                path_abs = target_root / path
+                other_abs = target_root / other
+                if path_abs.is_dir() and other_abs.is_dir():
+                    is_prefix = True
+                    break
+        if not is_prefix:
+            final.append(path)
+
+    return tuple(final)
 
 
 def normalize_mission(value:Any)->tuple[str,tuple[SelectionTerm,...]]:
@@ -180,8 +253,8 @@ def _select_regions(
     return selected, len(selected) < len(unique)
 
 
-def build_evidence_pack(target:Any, mission_value:Any)->MissionEvidencePack:
-    mission, initial=normalize_mission(mission_value); inventory=read_source_documents(target); direct=tuple(t.term for t in initial)
+def build_evidence_pack(target:Any, mission_value:Any, allowed_paths: tuple[str, ...] = ())->MissionEvidencePack:
+    mission, initial=normalize_mission(mission_value); inventory=read_source_documents(target, allowed_paths=allowed_paths); direct=tuple(t.term for t in initial)
     indexed=sum(len(_symbols(d)) for d in inventory.documents)
     if indexed>MAX_SYMBOLS: _fail("MISSION_SYMBOL_INDEX_LIMIT_EXCEEDED","Mission symbol index limit exceeded")
     file_rows=[]; regions=[]; symbols=[]; relationships=[]; tests=[]; counts={t:0 for t in direct}; limitations=[]
@@ -276,7 +349,27 @@ def build_evidence_pack(target:Any, mission_value:Any)->MissionEvidencePack:
     return pack
 
 
-def run_mission_audit(target:Any, mission:Any)->SkillExecutionResult:
-    pack=build_evidence_pack(target,mission); sufficient=pack.completeness.status=="sufficient"
+def run_mission_audit(target:Any, mission:Any, include_paths: tuple[str, ...] = ())->SkillExecutionResult:
+    # Normalize and validate structural scope
+    target_root = Path(target).resolve()
+    allowed_paths = normalize_structural_scope(include_paths, target_root)
+
+    pack=build_evidence_pack(target, mission, allowed_paths)
+    pack = MissionEvidencePack(
+        schema_version=pack.schema_version,
+        mission=pack.mission,
+        target=pack.target,
+        selection_terms=pack.selection_terms,
+        files=pack.files,
+        regions=pack.regions,
+        symbols=pack.symbols,
+        relationships=pack.relationships,
+        related_tests=pack.related_tests,
+        unresolved_questions=pack.unresolved_questions,
+        completeness=pack.completeness,
+        limitations=pack.limitations,
+        structural_scope=allowed_paths
+    )
+    sufficient=pack.completeness.status=="sufficient"
     evidence=SkillExecutionEvidence("mission_evidence_pack",Status.OK if sufficient else Status.WARNING,"Mission evidence collection completed.",pack,"ok" if sufficient else "MISSION_INSUFFICIENT_EVIDENCE")
     return SkillExecutionResult("mission-audit",SkillExecutionStatus.PASSED if sufficient else SkillExecutionStatus.COMPLETED_WITH_INSUFFICIENT_EVIDENCE,0 if sufficient else 3,(evidence,))

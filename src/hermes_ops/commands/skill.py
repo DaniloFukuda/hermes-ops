@@ -27,8 +27,9 @@ def _structured_details(value: Any) -> Any:
     return value
 
 
-def run_skill_command(target_project: str, skill_id: str, mission: str | None = None) -> SkillExecutionResult:
-    return run_skill(target_project, skill_id, PILOT_POLICY, inputs=SkillRunInputs(mission))
+def run_skill_command(target_project: str, skill_id: str, mission: str | None = None, include_paths: tuple[str, ...] | list[str] | None = None) -> SkillExecutionResult:
+    inputs = SkillRunInputs(mission, include_paths=tuple(include_paths) if include_paths else ())
+    return run_skill(target_project, skill_id, PILOT_POLICY, inputs=inputs)
 
 
 def skill_result_payload(

@@ -99,7 +99,7 @@ def _dispatch_skill(
     if plan.skills[0].id == "code-audit":
         return run_code_audit(target_project if original_target is None else original_target)
     if plan.skills[0].id == "mission-audit":
-        return run_mission_audit(target_project if original_target is None else original_target, inputs.mission)
+        return run_mission_audit(target_project if original_target is None else original_target, inputs.mission, inputs.include_paths)
     raise SkillExecutionError(
         "SKILL_EXECUTION_NOT_SUPPORTED",
         f"Skill '{plan.skills[0].id}' has no execution handler",

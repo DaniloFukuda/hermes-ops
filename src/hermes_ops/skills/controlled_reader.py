@@ -99,10 +99,54 @@ def _relative(root: Path, path: Path) -> str:
     return value
 
 
-def _inventory(root: Path, *, max_depth: int, max_directories: int, max_files: int, max_file_bytes: int, max_total_bytes: int) -> tuple[tuple[_Candidate, ...], int]:
-    directories, candidates, stack = 1, [], [(root, 0)]
+def _is_path_allowed(relative: str, allowed_paths: tuple[str, ...], target_root: Path) -> bool:
+    """Check if a relative path is within allowed paths.
+
+    For directories: if the path is a prefix of any allowed path, it must be traversed
+    (it's an ancestor of something in scope). If it's within an allowed directory scope,
+    it's allowed.
+
+    For files: exact match only (no prefix matching).
+
+    Case-insensitive comparison for Windows compatibility.
+    """
+    if not allowed_paths:
+        return True
+
+    # Normalize for case-insensitive comparison (Windows)
+    relative_lower = relative.lower()
+
+    for allowed in allowed_paths:
+        # Determine if allowed path is a directory or file
+        allowed_abs = target_root / allowed
+        is_dir = allowed_abs.is_dir()
+
+        if is_dir:
+            # Directory scope: allows exact match and all descendants
+            allowed_dir = allowed.rstrip("/")
+            # Case-insensitive comparison
+            allowed_lower = allowed_dir.lower()
+            if relative_lower == allowed_lower or relative_lower.startswith(allowed_lower + "/"):
+                return True
+        else:
+            # File scope: exact match only (case-insensitive)
+            if relative_lower == allowed.lower():
+                return True
+
+        # If this path is an ancestor of an allowed path, we must traverse it
+        # Handle root directory (relative_lower == "") as special case: root is ancestor of everything
+        if relative_lower == "":
+            return True
+        if allowed.lower().startswith(relative_lower + "/"):
+            return True
+
+    return False
+
+
+def _inventory(root: Path, *, max_depth: int, max_directories: int, max_files: int, max_file_bytes: int, max_total_bytes: int, allowed_paths: tuple[str, ...] = ()) -> tuple[tuple[_Candidate, ...], int]:
+    directories, candidates, stack = 1, [], [(root, 0, "")]
     while stack:
-        directory, depth = stack.pop()
+        directory, depth, relative_prefix = stack.pop()
         if depth > max_depth:
             _fail("CODE_AUDIT_DEPTH_LIMIT_EXCEEDED", "Audit depth limit exceeded")
         try:
@@ -118,17 +162,20 @@ def _inventory(root: Path, *, max_depth: int, max_directories: int, max_files: i
                 directories += 1
                 if directories > max_directories:
                     _fail("CODE_AUDIT_DIRECTORY_LIMIT_EXCEEDED", "Audit directory limit exceeded")
-                if entry.name not in EXCLUDED_DIRECTORIES:
+                # Prune traversal: only descend if directory is ancestor of or within allowed paths
+                if entry.name not in EXCLUDED_DIRECTORIES and _is_path_allowed(relative, allowed_paths, root):
                     if depth + 1 > max_depth:
                         _fail("CODE_AUDIT_DEPTH_LIMIT_EXCEEDED", "Audit depth limit exceeded")
-                    children.append((entry, depth + 1))
+                    children.append((entry, depth + 1, relative))
             elif stat.S_ISREG(metadata.st_mode):
                 if entry.suffix in ALLOWED_EXTENSIONS:
-                    if metadata.st_size > max_file_bytes:
-                        _fail("CODE_AUDIT_FILE_SIZE_EXCEEDED", "An audit file exceeds its size limit")
-                    candidates.append(_Candidate(entry, relative, metadata))
-                    if len(candidates) > max_files:
-                        _fail("CODE_AUDIT_FILE_LIMIT_EXCEEDED", "Audit file limit exceeded")
+                    # Only add candidate if it's within allowed paths
+                    if _is_path_allowed(relative, allowed_paths, root):
+                        if metadata.st_size > max_file_bytes:
+                            _fail("CODE_AUDIT_FILE_SIZE_EXCEEDED", "An audit file exceeds its size limit")
+                        candidates.append(_Candidate(entry, relative, metadata))
+                        if len(candidates) > max_files:
+                            _fail("CODE_AUDIT_FILE_LIMIT_EXCEEDED", "Audit file limit exceeded")
             else:
                 _fail("CODE_AUDIT_UNSAFE_FILE_TYPE", "Audit encountered an unsafe file type")
         stack.extend(reversed(children))
@@ -185,9 +232,9 @@ def _read(candidate: _Candidate, max_file_bytes: int) -> SourceDocument:
     return SourceDocument(candidate.relative, text, len(data))
 
 
-def read_source_documents(value: Any, *, max_depth: int = MAX_DEPTH, max_directories: int = MAX_DIRECTORIES, max_files: int = MAX_FILES, max_file_bytes: int = MAX_FILE_BYTES, max_total_bytes: int = MAX_TOTAL_BYTES) -> SourceInventory:
+def read_source_documents(value: Any, *, max_depth: int = MAX_DEPTH, max_directories: int = MAX_DIRECTORIES, max_files: int = MAX_FILES, max_file_bytes: int = MAX_FILE_BYTES, max_total_bytes: int = MAX_TOTAL_BYTES, allowed_paths: tuple[str, ...] = ()) -> SourceInventory:
     root = validate_target(value)
-    candidates, directories = _inventory(root, max_depth=max_depth, max_directories=max_directories, max_files=max_files, max_file_bytes=max_file_bytes, max_total_bytes=max_total_bytes)
+    candidates, directories = _inventory(root, max_depth=max_depth, max_directories=max_directories, max_files=max_files, max_file_bytes=max_file_bytes, max_total_bytes=max_total_bytes, allowed_paths=allowed_paths)
     documents = tuple(_read(candidate, max_file_bytes) for candidate in candidates)
     if sum(document.bytes_read for document in documents) > max_total_bytes:
         _fail("CODE_AUDIT_TOTAL_SIZE_EXCEEDED", "Audit total size limit exceeded")

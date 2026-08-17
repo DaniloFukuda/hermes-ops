@@ -170,3 +170,174 @@ def test_uncovered_central_concept_keeps_large_pack_insufficient(tmp_path: Path)
     assert pack.completeness.status == "insufficient"
     assert "settlement" in pack.completeness.unmatched_terms
     assert "UNCOVERED_CENTRAL_TERMS" in pack.completeness.incompleteness_codes
+
+
+def test_evidence_pack_includes_structural_scope_field(tmp_path: Path) -> None:
+    """Spec: HERMES-0014 / AC-16 - structural_scope field exists in MissionEvidencePack."""
+    (tmp_path / "service.py").write_text("def process(): pass\n", encoding="utf-8")
+    pack = build_evidence_pack(tmp_path, "process service")
+    # structural_scope should exist and default to empty tuple for legacy calls
+    assert hasattr(pack, "structural_scope")
+    assert isinstance(pack.structural_scope, tuple)
+    assert pack.structural_scope == ()
+
+
+def test_mission_evidence_pack_has_structural_scope_field(tmp_path: Path) -> None:
+    """Spec: HERMES-0014 / AC-16 - structural_scope field exists and defaults to empty tuple."""
+    from hermes_ops.skills.mission_models import MissionEvidencePack, MissionCompleteness
+
+    # Test default empty tuple for backward compatibility
+    pack = MissionEvidencePack(
+        schema_version=1,
+        mission="test mission",
+        target="<PROJECT_ROOT>",
+        selection_terms=(),
+        files=(),
+        regions=(),
+        symbols=(),
+        relationships=(),
+        related_tests=(),
+        unresolved_questions=(),
+        completeness=MissionCompleteness(
+            status="sufficient",
+            matched_terms=(),
+            unmatched_terms=(),
+            has_active_implementation=False,
+            has_traceable_relationship=False,
+            has_related_test=False,
+            counts=(),
+            incompleteness_codes=(),
+        ),
+        limitations=(),
+    )
+    assert hasattr(pack, "structural_scope")
+    assert pack.structural_scope == ()
+    assert isinstance(pack.structural_scope, tuple)
+
+    # Test setting structural_scope with values
+    pack_with_scope = MissionEvidencePack(
+        schema_version=1,
+        mission="test mission",
+        target="<PROJECT_ROOT>",
+        selection_terms=(),
+        files=(),
+        regions=(),
+        symbols=(),
+        relationships=(),
+        related_tests=(),
+        unresolved_questions=(),
+        completeness=MissionCompleteness(
+            status="sufficient",
+            matched_terms=(),
+            unmatched_terms=(),
+            has_active_implementation=False,
+            has_traceable_relationship=False,
+            has_related_test=False,
+            counts=(),
+            incompleteness_codes=(),
+        ),
+        limitations=(),
+        structural_scope=("src/**/*.py", "tests/**/*.py"),
+    )
+    assert pack_with_scope.structural_scope == ("src/**/*.py", "tests/**/*.py")
+
+    # Test frozen immutability
+    with pytest.raises(FrozenInstanceError):
+        pack.structural_scope = ("new",)  # type: ignore[misc]
+
+
+def test_scoped_discovery_does_not_read_outside_file(tmp_path: Path) -> None:
+    """Spec: HERMES-0014 / AC-10 — arquivo fora do scope NÃO tem _read() chamado.
+
+    Creates a structure where a file outside the scope would cause read_source_documents
+    to fail if it were read (binary content). With scope restricting to allowed/,
+    the forbidden file must never be passed to _read().
+    """
+    # Setup: allowed/selected.py (valid UTF-8) and forbidden/outside.py (binary with NUL)
+    (tmp_path / "allowed").mkdir()
+    (tmp_path / "forbidden").mkdir()
+    (tmp_path / "allowed" / "selected.py").write_text("def process(): pass\n", encoding="utf-8")
+    # This file would trigger CODE_AUDIT_BINARY_FILE if _read() is called on it
+    (tmp_path / "forbidden" / "outside.py").write_bytes(b"x\x00y" * 100)
+
+    # With scope restricting to allowed/, forbidden/outside.py must NOT be read
+    pack = build_evidence_pack(tmp_path, "process", allowed_paths=("allowed",))
+
+    # Should succeed (not fail with CODE_AUDIT_BINARY_FILE)
+    assert pack.completeness.status in ("sufficient", "insufficient")
+    # Only allowed/selected.py should be in evidence
+    file_paths = {f.path for f in pack.files}
+    assert file_paths == {"allowed/selected.py"}
+    assert "forbidden/outside.py" not in file_paths
+
+
+def test_scoped_discovery_prunes_outside_directory(tmp_path: Path) -> None:
+    """Spec: HERMES-0014 / AC-11 — diretório fora do scope não enumera filhos.
+
+    Creates a large directory tree outside the scope. If traversal pruning works,
+    the walk should not descend into forbidden/ at all.
+    """
+    (tmp_path / "allowed").mkdir()
+    (tmp_path / "forbidden").mkdir()
+    # Create many files in forbidden/ — if traversed, would hit file limits
+    for i in range(50):
+        (tmp_path / "forbidden" / f"file_{i}.py").write_text(f"# file {i}\n", encoding="utf-8")
+    (tmp_path / "allowed" / "main.py").write_text("def main(): pass\n", encoding="utf-8")
+
+    # With scope = allowed/, forbidden/ should be pruned during traversal
+    pack = build_evidence_pack(tmp_path, "main", allowed_paths=("allowed",))
+
+    # Should succeed without hitting file limits
+    assert pack.completeness.status in ("sufficient", "insufficient")
+    file_paths = {f.path for f in pack.files}
+    assert file_paths == {"allowed/main.py"}
+    # No forbidden files should appear
+    assert not any(p.startswith("forbidden/") for p in file_paths)
+
+
+def test_scoped_discovery_allows_explicit_file_only(tmp_path: Path) -> None:
+    """Spec: HERMES-0014 / AC-08 — arquivo explícito incluído, irmãos não."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "selected.py").write_text("def selected(): pass\n", encoding="utf-8")
+    (tmp_path / "src" / "sibling.py").write_text("def sibling(): pass\n", encoding="utf-8")
+
+    # Include only the specific file
+    pack = build_evidence_pack(tmp_path, "selected", allowed_paths=("src/selected.py",))
+
+    file_paths = {f.path for f in pack.files}
+    assert file_paths == {"src/selected.py"}
+    assert "src/sibling.py" not in file_paths
+
+
+def test_scoped_discovery_allows_directory_recursive(tmp_path: Path) -> None:
+    """Spec: HERMES-0014 / AC-07 — diretório incluído autoriza descendentes."""
+    (tmp_path / "src" / "auth").mkdir(parents=True)
+    (tmp_path / "src" / "auth" / "login.py").write_text("def login(): pass\n", encoding="utf-8")
+    (tmp_path / "src" / "auth" / "session.py").write_text("def session(): pass\n", encoding="utf-8")
+    (tmp_path / "src" / "other").mkdir()
+    (tmp_path / "src" / "other" / "unrelated.py").write_text("def unrelated(): pass\n", encoding="utf-8")
+
+    # Include directory — should get all descendants
+    pack = build_evidence_pack(tmp_path, "auth login", allowed_paths=("src/auth",))
+
+    file_paths = {f.path for f in pack.files}
+    assert "src/auth/login.py" in file_paths
+    assert "src/auth/session.py" in file_paths
+    assert "src/other/unrelated.py" not in file_paths
+
+
+def test_scoped_discovery_mixed_file_and_dir(tmp_path: Path) -> None:
+    """Spec: HERMES-0014 / AC-08 + AC-07 — combina arquivo + diretório."""
+    (tmp_path / "src" / "auth").mkdir(parents=True)
+    (tmp_path / "src" / "auth" / "login.py").write_text("def login(): pass\n", encoding="utf-8")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_login.py").write_text("def test_login(): pass\n", encoding="utf-8")
+    (tmp_path / "src" / "other.py").write_text("def other(): pass\n", encoding="utf-8")
+
+    # Include directory + explicit file
+    pack = build_evidence_pack(tmp_path, "auth test", allowed_paths=("src/auth", "tests/test_login.py"))
+
+    file_paths = {f.path for f in pack.files}
+    assert "src/auth/login.py" in file_paths
+    assert "tests/test_login.py" in file_paths
+    assert "src/other.py" not in file_paths

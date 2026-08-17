@@ -30,6 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="hermes-ops",
         description="Read-only operational checks for local projects.",
+        allow_abbrev=False,
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     for name in ("doctor", "worktree", "preflight"):
@@ -41,12 +42,18 @@ def build_parser() -> argparse.ArgumentParser:
             default="text",
             help="Output format (default: text)",
         )
-    skill = subparsers.add_parser("skill")
+    skill = subparsers.add_parser("skill", allow_abbrev=False)
     skill_commands = skill.add_subparsers(dest="skill_command", required=True)
-    skill_run = skill_commands.add_parser("run")
+    skill_run = skill_commands.add_parser("run", allow_abbrev=False)
     skill_run.add_argument("skill_id")
     skill_run.add_argument("--project", required=True, help="Target project path to inspect")
     skill_run.add_argument("--mission", help="Directed audit mission (mission-audit only)")
+    skill_run.add_argument(
+        "--include-path",
+        action="append",
+        default=[],
+        help="Restrict structural scope to this relative path (file or directory). Repeatable.",
+    )
     skill_run.add_argument(
         "--format",
         choices=("text", "json"),
@@ -123,7 +130,7 @@ def _dispatch(command: str, project: str) -> Report:
 
 def _run_skill_cli(args: argparse.Namespace, sanitizer: PublicSanitizer) -> int:
     try:
-        result = run_skill_command(args.project, args.skill_id, args.mission)
+        result = run_skill_command(args.project, args.skill_id, args.mission, include_paths=args.include_path)
     except (
         SkillCatalogError,
         SkillContractError,
