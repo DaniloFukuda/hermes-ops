@@ -1,0 +1,6 @@
+# This is the complete minimal configuration.
+# All omitted settings use the documented safe defaults.
+
+[project]
+name = "example-project"
+

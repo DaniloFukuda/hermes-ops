@@ -1,0 +1,4 @@
+include tests/conftest.py
+include skills/git-preflight/SKILL.md
+include skills/code-audit/SKILL.md
+include skills/mission-audit/SKILL.md
