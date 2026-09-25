@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Execution and governance layer for bounded AI-agent workflows"
 readme = "README.md"
 requires-python = ">=3.11"
-license = "LicenseRef-Proprietary"
+license = "MIT"
 authors = [{ name = "hermes-ops contributors" }]
 dependencies = []
 
