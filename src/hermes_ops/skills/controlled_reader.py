@@ -11,6 +11,7 @@ from hermes_ops.core.errors import SkillExecutionError
 
 ALLOWED_EXTENSIONS = frozenset({".py", ".pyi", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"})
 EXCLUDED_DIRECTORIES = frozenset({".git", ".hg", ".svn", ".venv", "venv", "node_modules", "vendor", "dist", "build", "coverage", "__pycache__", ".mypy_cache", ".pytest_cache", ".tox", ".nox"})
+_VERSIONED_VENV = re.compile(r"\.venv[0-9]+\Z")
 MAX_DEPTH = 32
 MAX_DIRECTORIES = 5_000
 MAX_FILES = 1_000
@@ -60,6 +61,14 @@ def _metadata(path: Path, code: str = "CODE_AUDIT_READ_FAILED") -> os.stat_resul
 def _reject(metadata: os.stat_result, code: str = "CODE_AUDIT_UNSAFE_PATH") -> None:
     if stat.S_ISLNK(metadata.st_mode) or getattr(metadata, "st_file_attributes", 0) & _REPARSE:
         _fail(code, "Controlled reading does not follow filesystem indirections")
+
+
+def _is_excluded_directory(name: str) -> bool:
+    return (
+        name in EXCLUDED_DIRECTORIES
+        or name.startswith(".pytest_")
+        or _VERSIONED_VENV.fullmatch(name) is not None
+    )
 
 
 def validate_target(value: str | Path) -> Path:
@@ -163,7 +172,7 @@ def _inventory(root: Path, *, max_depth: int, max_directories: int, max_files: i
                 if directories > max_directories:
                     _fail("CODE_AUDIT_DIRECTORY_LIMIT_EXCEEDED", "Audit directory limit exceeded")
                 # Prune traversal: only descend if directory is ancestor of or within allowed paths
-                if entry.name not in EXCLUDED_DIRECTORIES and _is_path_allowed(relative, allowed_paths, root):
+                if not _is_excluded_directory(entry.name) and _is_path_allowed(relative, allowed_paths, root):
                     if depth + 1 > max_depth:
                         _fail("CODE_AUDIT_DEPTH_LIMIT_EXCEEDED", "Audit depth limit exceeded")
                     children.append((entry, depth + 1, relative))

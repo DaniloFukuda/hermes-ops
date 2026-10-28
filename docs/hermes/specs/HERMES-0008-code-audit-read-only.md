@@ -4,7 +4,7 @@ title = "Code audit read-only com evidências"
 status = "Implementado"
 owners = ["Danilo"]
 created = "2026-08-11"
-updated = "2026-08-11"
+updated = "2026-09-02"
 supersedes = []
 related = ["HERMES-0004", "HERMES-0005", "HERMES-0006", "HERMES-0007"]
 
@@ -175,6 +175,34 @@ test = "tests/test_skill_catalog.py::test_installed_catalog_resolution_does_not_
 [[acceptance_criteria]]
 id = "AC-42"
 justification = "Aceitação real executada externamente após a suíte; o teste automatizado portátil não pode depender de um clone de consumidor."
+
+[[acceptance_criteria]]
+id = "AC-43"
+test = "tests/test_controlled_reader.py::test_pytest_tmp_is_pruned_without_iterdir"
+
+[[acceptance_criteria]]
+id = "AC-44"
+test = "tests/test_controlled_reader.py::test_pytest_artifact_family_is_pruned"
+
+[[acceptance_criteria]]
+id = "AC-45"
+test = "tests/test_controlled_reader.py::test_version_suffixed_python_environment_is_pruned"
+
+[[acceptance_criteria]]
+id = "AC-46"
+test = "tests/test_controlled_reader.py::test_unreadable_code_directory_still_fails_closed"
+
+[[acceptance_criteria]]
+id = "AC-47"
+test = "tests/test_controlled_reader.py::test_reparse_point_is_rejected_before_pytest_pruning"
+
+[[acceptance_criteria]]
+id = "AC-48"
+test = "tests/test_controlled_reader.py::test_pruning_preserves_deterministic_document_order"
+
+[[acceptance_criteria]]
+id = "AC-49"
+test = "tests/test_controlled_reader.py::test_pruning_preserves_structural_and_file_limits"
 +++
 
 # HERMES-0008 - Code audit read-only com evidências
@@ -512,12 +540,19 @@ coverage
 __pycache__
 .mypy_cache
 .pytest_cache
+.pytest_*
 .tox
 .nox
+.venv<versão-numérica>
 ```
 
 A exclusão evita dependências vendorizadas, metadata de VCS, caches e produtos
-gerados. Outros diretórios não são excluídos por heurística.
+gerados. `.pytest_*` significa qualquer nome iniciado literalmente por
+`.pytest_`. `.venv<versão-numérica>` significa `.venv` seguido por um ou mais
+dígitos ASCII, por exemplo `.venv312`; nomes como `.venv-local` não pertencem à
+família. As famílias são estruturais e fechadas: `.gitignore`, estado tracked ou
+untracked e ilegibilidade não criam exclusões. Outros diretórios não são
+excluídos por heurística.
 
 ### 8.4 Limites fixos de leitura
 
@@ -811,7 +846,7 @@ INVENTARIAR_DIRETORIO(DIRETORIO, NIVEL):
             bloquear auditoria inteira
 
         SE for diretório:
-            SE nome estiver na lista fechada de exclusões:
+            SE nome estiver na lista fechada ou nas famílias estruturais fechadas:
                 não entrar
             SENÃO:
                 inventariar recursivamente no próximo nível
@@ -957,8 +992,8 @@ mesma condição.
   próximos ou desconhecidos bloqueiam.
 - **AC-03:** somente as oito extensões permitidas são abertas para conteúdo.
 - **AC-04:** inventário e achados são determinísticos pelo contrato de ordem.
-- **AC-05:** somente os nomes documentados de diretórios são podados; não há
-  heurística silenciosa adicional.
+- **AC-05:** somente os nomes e famílias estruturais documentados de diretórios
+  são podados; não há heurística silenciosa adicional.
 
 ### Limites e paths
 
@@ -1041,6 +1076,23 @@ mesma condição.
   aceitável somente como “nenhum gatilho das regras desta versão”, nunca como
   certificação de segurança.
 
+### Pruning estrutural do leitor compartilhado
+
+- **AC-43:** `.pytest_tmp` é classificado com `lstat` e podado sem tentativa de
+  `iterdir`, mesmo quando seu conteúdo não pode ser enumerado.
+- **AC-44:** `.pytest_verify` e qualquer outro nome iniciado por `.pytest_` são
+  podados pela mesma regra estrutural fechada.
+- **AC-45:** ambientes Python nomeados como `.venv` seguido somente por dígitos
+  ASCII, incluindo `.venv312`, são podados.
+- **AC-46:** diretório potencialmente relevante e ilegível continua bloqueando
+  com `CODE_AUDIT_READ_FAILED`; nomes arbitrários e untracked não são ignorados.
+- **AC-47:** symlink ou reparse point bloqueia antes de qualquer pruning, mesmo
+  quando o nome pertence a uma família excluída.
+- **AC-48:** as novas famílias não alteram a ordenação determinística dos
+  documentos restantes.
+- **AC-49:** os limites estruturais, de arquivos e bytes permanecem ativos; o
+  conteúdo descendente de diretório podado não é enumerado nem contado.
+
 Cada AC possui teste automatizado planejado no front matter. O componente de
 “risco realmente relacionado à missão” em AC-42 também exige revisão humana da
 evidência, pois relevância de negócio não deve ser inferida por uma regra
@@ -1050,7 +1102,8 @@ específica de consumidor.
 
 ### 17.1 Testes unitários
 
-Arquivo principal proposto: `tests/test_code_audit.py`.
+Arquivos principais: `tests/test_code_audit.py` e
+`tests/test_controlled_reader.py`.
 
 1. Validar manifesto e compatibilidade com policy (`AC-01`).
 2. Criar árvores temporárias com cada extensão permitida e extensões vizinhas;
@@ -1078,6 +1131,11 @@ Arquivo principal proposto: `tests/test_code_audit.py`.
     nenhuma representação, enquanto o gatilho continua verificável (`AC-25`).
 13. Auditar fixture limpa e provar zero achados (`AC-28`).
 14. Injetar falha após achados provisórios e provar descarte atômico (`AC-30`).
+15. Provar pruning sem `iterdir` para `.pytest_*`, pruning de `.venv` versionada,
+    fail closed de diretório de código ilegível e rejeição de reparse antes do
+    pruning (`AC-43` a `AC-47`).
+16. Reexecutar inventários idênticos e limites reduzidos sobre árvores com
+    artefatos podados (`AC-48`, `AC-49`).
 
 ### 17.2 Testes de integração de skills
 
@@ -1192,6 +1250,7 @@ Esta lista é indicativa e não autoriza alterações nesta fase:
 ```text
 skills/code-audit/SKILL.md
 src/hermes_ops/skills/code_audit.py
+src/hermes_ops/skills/controlled_reader.py
 src/hermes_ops/skills/execution.py
 src/hermes_ops/skills/executor.py
 src/hermes_ops/skills/catalog.py
@@ -1200,6 +1259,7 @@ src/hermes_ops/core/errors.py
 pyproject.toml
 MANIFEST.in
 tests/test_code_audit.py
+tests/test_controlled_reader.py
 tests/test_code_audit_dogfood.py
 tests/test_skill_execution.py
 tests/test_skill_catalog.py
