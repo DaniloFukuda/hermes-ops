@@ -1,0 +1,61 @@
+"""Optional local audit-observation memory above the frozen Hermes core."""
+
+from .core import (
+    canonical_request_payload,
+    create_observation,
+    derive_memory_freshness,
+    is_memory_eligible,
+    inspect_observation_privacy,
+    observation_from_rankable_finding,
+    observation_from_auditor_outcome,
+    sanitize_memory_payload,
+)
+from .models import (
+    AuditMemoryObservation,
+    DisclosureLevel,
+    FreshnessState,
+    LineageEventKind,
+    LegacyPrivacyState,
+    MemoryCandidate,
+    MemoryError,
+    MemoryKind,
+    MemoryCurrentContext,
+    MemoryRetrievalRequest,
+    MemoryRevalidationHint,
+    MemorySchemaVersion,
+    RepositoryIdentity,
+    PrivacyMigrationResult,
+)
+from .store import (
+    MemoryService, MemoryStore, inspect_memory_observation_privacy,
+    migrate_memory_observation_privacy,
+)
+
+__all__ = (
+    "AuditMemoryObservation",
+    "DisclosureLevel",
+    "FreshnessState",
+    "LineageEventKind",
+    "LegacyPrivacyState",
+    "MemoryCandidate",
+    "MemoryError",
+    "MemoryKind",
+    "MemoryCurrentContext",
+    "MemoryRetrievalRequest",
+    "MemoryRevalidationHint",
+    "MemorySchemaVersion",
+    "MemoryService",
+    "MemoryStore",
+    "RepositoryIdentity",
+    "PrivacyMigrationResult",
+    "canonical_request_payload",
+    "create_observation",
+    "derive_memory_freshness",
+    "is_memory_eligible",
+    "inspect_observation_privacy",
+    "inspect_memory_observation_privacy",
+    "migrate_memory_observation_privacy",
+    "observation_from_rankable_finding",
+    "observation_from_auditor_outcome",
+    "sanitize_memory_payload",
+)

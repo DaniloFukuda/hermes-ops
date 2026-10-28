@@ -1,10 +1,23 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from hermes_ops.core.presentation import PublicSanitizer
+from hermes_ops.core.errors import SkillExecutionError
 from hermes_ops.skills import SkillExecutionResult, SkillPolicy, SkillRisk, SkillRunInputs, run_skill
+from hermes_ops.git import GitInspector
+from hermes_ops.memory.models import DisclosureLevel, MemoryCurrentContext, RepositoryIdentity
+from hermes_ops.memory.store import MemoryService
+from hermes_ops.orchestration import (
+    MemoryAssistedAuditRequest,
+    MemoryAssistedAuditResult,
+    MemoryMode,
+    memory_assisted_audit_json,
+    run_memory_assisted_audit,
+)
+from hermes_ops.skills.audit_round import AuditRoundStatus, CodeAuditRequest
 
 
 PILOT_POLICY = SkillPolicy(
@@ -12,6 +25,20 @@ PILOT_POLICY = SkillPolicy(
     allow_write=False,
     available_requires=frozenset({"git"}),
 )
+
+
+def build_cli_current_context(
+    target_project: str,
+    repository_identity: RepositoryIdentity,
+    structural_scope: tuple[str, ...],
+) -> MemoryCurrentContext:
+    """Build optional local provenance without reading target source content."""
+    git_state = GitInspector().inspect(Path(target_project))
+    return MemoryCurrentContext(
+        repository_id=repository_identity.repository_id,
+        current_revision=(git_state.head if git_state.has_commits and not git_state.error else None),
+        current_structural_scope=structural_scope,
+    )
 
 
 def _structured_details(value: Any) -> Any:
@@ -42,6 +69,102 @@ def run_skill_command(
         consumer_symbol=consumer_symbol,
     )
     return run_skill(target_project, skill_id, PILOT_POLICY, inputs=inputs)
+
+
+def run_memory_assisted_skill_command(
+    target_project: str,
+    mission: str | None,
+    include_paths: tuple[str, ...] | list[str] | None,
+    memory_mode: str,
+    memory_store: str | None,
+    repository_id: str | None,
+    memory_disclosure: str = "header",
+) -> MemoryAssistedAuditResult:
+    if not mission or not mission.strip():
+        raise SkillExecutionError("SKILL_EXECUTION_INVALID", "Memory-assisted audit requires --mission")
+    modes = {
+        "off": MemoryMode.DISABLED,
+        "read": MemoryMode.READ_ONLY,
+        "read-write": MemoryMode.READ_WRITE,
+    }
+    mode = modes[memory_mode]
+    disclosures = {
+        "header": DisclosureLevel.HEADER,
+        "structured": DisclosureLevel.STRUCTURED,
+        "canonical": DisclosureLevel.CANONICAL,
+        "revalidation-hint": DisclosureLevel.REVALIDATION_HINT,
+    }
+    if mode is not MemoryMode.DISABLED and not memory_store:
+        raise SkillExecutionError("SKILL_EXECUTION_INVALID", "Active Memory mode requires --memory-store")
+    if mode is not MemoryMode.DISABLED and not repository_id:
+        raise SkillExecutionError("SKILL_EXECUTION_INVALID", "Active Memory mode requires --repository-id")
+    identity = RepositoryIdentity.explicit(repository_id or "local-project")
+    current_context = None
+    if mode is not MemoryMode.DISABLED:
+        current_context = build_cli_current_context(
+            target_project, identity,
+            tuple(include_paths) if include_paths else (),
+        )
+    request = MemoryAssistedAuditRequest(
+        mission=mission,
+        target=target_project,
+        repository_identity=identity,
+        current_context=current_context,
+        authoritative_structural_scope=tuple(include_paths) if include_paths else (),
+        audit_requests=(CodeAuditRequest(),),
+        memory_mode=mode,
+        memory_disclosure_level=disclosures[memory_disclosure],
+        allow_post_audit_write=mode is MemoryMode.READ_WRITE,
+    )
+    if mode is MemoryMode.DISABLED:
+        return run_memory_assisted_audit(request)
+    with MemoryService.open(memory_store, read_only=mode is MemoryMode.READ_ONLY) as service:
+        return run_memory_assisted_audit(request, service)
+
+
+def memory_assisted_result_json(
+    result: MemoryAssistedAuditResult, sanitizer: PublicSanitizer,
+) -> str:
+    return json.dumps(
+        sanitizer.sanitize(json.loads(memory_assisted_audit_json(result))),
+        ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    )
+
+
+def memory_assisted_result_text(
+    result: MemoryAssistedAuditResult, sanitizer: PublicSanitizer,
+) -> str:
+    context = result.historical_context
+    reasons = context.candidate_reason_codes or {}
+    candidates = tuple(
+        f"candidate={item.observation_id} freshness={item.freshness_state.value} "
+        f"privacy={item.privacy_state.value} "
+        f"canonical={'AVAILABLE' if item.canonical_available else 'BLOCKED'} "
+        f"score={item.retrieval_score} reasons={','.join(reasons.get(item.observation_id, ()))}"
+        for item in context.candidates
+    )
+    metrics = context.operational_metrics
+    metric_lines = () if metrics is None else (
+        f"disclosure={context.effective_disclosure.value}",
+        f"metrics=retrieval_requested={str(metrics.retrieval_requested).lower()},"
+        f"candidates_returned={metrics.candidates_returned},hints_returned={metrics.hints_returned},"
+        f"writeback_attempted={str(metrics.writeback_attempted).lower()},"
+        f"observations_written={metrics.observations_written},"
+        f"diagnostics={metrics.memory_diagnostics_count}",
+        f"timing_ms=retrieval:{metrics.retrieval_duration_ms:.3f},"
+        f"disclosure:{metrics.disclosure_duration_ms:.3f},writeback:{metrics.writeback_duration_ms:.3f}",
+    )
+    return "\n".join((
+        "HISTORICAL MEMORY",
+        f"candidates={len(result.historical_context.candidates)}",
+        f"diagnostics={','.join(result.historical_context.memory_diagnostics)}",
+        *metric_lines,
+        *candidates,
+        "CURRENT AUDIT RESULT",
+        f"status={result.fresh_audit.status.value}",
+        f"findings={len(result.fresh_audit.ranked_findings.ordered_findings)}",
+        f"limitations={len(result.fresh_audit.limitations)}",
+    ))
 
 
 def skill_result_payload(

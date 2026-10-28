@@ -10,6 +10,9 @@ from hermes_ops.commands.preflight import run_preflight
 from hermes_ops.commands.worktree import run_worktree
 from hermes_ops.commands.evidence import evidence_analysis_json, evidence_analysis_text, run_evidence_analysis
 from hermes_ops.commands.skill import (
+    memory_assisted_result_json,
+    memory_assisted_result_text,
+    run_memory_assisted_skill_command,
     run_skill_command,
     skill_result_json,
     skill_result_text,
@@ -47,9 +50,21 @@ def build_parser() -> argparse.ArgumentParser:
     skill_run = skill_commands.add_parser("run", allow_abbrev=False)
     skill_run.add_argument("skill_id")
     skill_run.add_argument("--project", required=True, help="Target project path to inspect")
-    skill_run.add_argument("--mission", help="Directed mission for mission-audit or execution-path-review")
+    skill_run.add_argument("--mission", help="Directed mission for mission-audit or memory-assisted-audit")
     skill_run.add_argument("--producer", help="Producer symbol (execution-path-review only)")
     skill_run.add_argument("--consumer", help="Consumer symbol (execution-path-review only)")
+    skill_run.add_argument(
+        "--memory", choices=("off", "read", "read-write"), default="off",
+        help="Historical context mode; memory-assisted-audit always runs a fresh audit (default: off)",
+    )
+    skill_run.add_argument("--memory-store", help="Local Memory SQLite store for historical context")
+    skill_run.add_argument("--repository-id", help="Logical repository identity used for Memory isolation")
+    skill_run.add_argument(
+        "--memory-disclosure",
+        choices=("header", "structured", "canonical", "revalidation-hint"),
+        default="header",
+        help="Historical candidate detail level (default: header); fresh audit is always required",
+    )
     skill_run.add_argument(
         "--include-path",
         action="append",
@@ -132,6 +147,23 @@ def _dispatch(command: str, project: str) -> Report:
 
 def _run_skill_cli(args: argparse.Namespace, sanitizer: PublicSanitizer) -> int:
     try:
+        if args.skill_id == "memory-assisted-audit":
+            result = run_memory_assisted_skill_command(
+                args.project, args.mission, args.include_path, args.memory,
+                args.memory_store, args.repository_id,
+                args.memory_disclosure,
+            )
+            print(
+                memory_assisted_result_json(result, sanitizer)
+                if args.format == "json"
+                else memory_assisted_result_text(result, sanitizer)
+            )
+            return 3 if result.fresh_audit.status.value == "FAILED" else 0
+        if args.memory != "off" or args.memory_store or args.repository_id or args.memory_disclosure != "header":
+            raise SkillExecutionError(
+                "SKILL_EXECUTION_INVALID",
+                "Memory options are only valid for memory-assisted-audit",
+            )
         result = run_skill_command(
             args.project,
             args.skill_id,

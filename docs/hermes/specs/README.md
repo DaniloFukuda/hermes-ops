@@ -1,5 +1,8 @@
 # Especificações do Hermes Ops
 
+> Baseline congelado da Memory V1 HERMES-0028–0033: consulte
+> [`HERMES-MEMORY-V1-BASELINE-0028-0033.md`](../HERMES-MEMORY-V1-BASELINE-0028-0033.md).
+
 ## Objetivo
 
 Esta pasta contém as especificações versionadas para alterações funcionais não
