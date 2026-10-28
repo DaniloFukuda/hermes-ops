@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import json
 import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
@@ -33,6 +35,52 @@ class SourceInventory:
     root: Path
     directories: int
     documents: tuple[SourceDocument, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SourceLimits:
+    max_depth: int
+    max_directories: int
+    max_files: int
+    max_file_bytes: int
+    max_total_bytes: int
+
+
+@dataclass(frozen=True, slots=True)
+class ScopedSourceSnapshot:
+    schema_version: int
+    structural_scope: tuple[str, ...]
+    documents: tuple[SourceDocument, ...]
+    directories: int
+    applied_limits: SourceLimits
+    limitations: tuple[str, ...]
+    digest: str
+
+
+def _snapshot_digest(
+    structural_scope: tuple[str, ...],
+    documents: tuple[SourceDocument, ...],
+    limits: SourceLimits,
+) -> str:
+    logical = {
+        "schema_version": 1,
+        "structural_scope": list(structural_scope),
+        "documents": [
+            {"path": item.path, "text": item.text}
+            for item in sorted(documents, key=lambda item: item.path)
+        ],
+        "applied_limits": {
+            "max_depth": limits.max_depth,
+            "max_directories": limits.max_directories,
+            "max_files": limits.max_files,
+            "max_file_bytes": limits.max_file_bytes,
+            "max_total_bytes": limits.max_total_bytes,
+        },
+    }
+    encoded = json.dumps(
+        logical, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,3 +296,42 @@ def read_source_documents(value: Any, *, max_depth: int = MAX_DEPTH, max_directo
     if sum(document.bytes_read for document in documents) > max_total_bytes:
         _fail("CODE_AUDIT_TOTAL_SIZE_EXCEEDED", "Audit total size limit exceeded")
     return SourceInventory(root, directories, documents)
+
+
+def read_scoped_source_snapshot(
+    value: Any,
+    *,
+    structural_scope: tuple[str, ...] = (),
+    max_depth: int = MAX_DEPTH,
+    max_directories: int = MAX_DIRECTORIES,
+    max_files: int = MAX_FILES,
+    max_file_bytes: int = MAX_FILE_BYTES,
+    max_total_bytes: int = MAX_TOTAL_BYTES,
+) -> ScopedSourceSnapshot:
+    if type(structural_scope) is not tuple or any(
+        type(item) is not str for item in structural_scope
+    ):
+        _fail("STRUCTURAL_SCOPE_INVALID_PATH", "Structural scope must be a tuple of paths")
+    ordered_scope = tuple(sorted(set(structural_scope)))
+    inventory = read_source_documents(
+        value,
+        max_depth=max_depth,
+        max_directories=max_directories,
+        max_files=max_files,
+        max_file_bytes=max_file_bytes,
+        max_total_bytes=max_total_bytes,
+        allowed_paths=ordered_scope,
+    )
+    documents = tuple(sorted(inventory.documents, key=lambda item: item.path))
+    limits = SourceLimits(
+        max_depth, max_directories, max_files, max_file_bytes, max_total_bytes
+    )
+    return ScopedSourceSnapshot(
+        1,
+        ordered_scope,
+        documents,
+        inventory.directories,
+        limits,
+        (),
+        _snapshot_digest(ordered_scope, documents, limits),
+    )

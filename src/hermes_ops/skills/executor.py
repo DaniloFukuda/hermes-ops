@@ -17,6 +17,7 @@ from hermes_ops.skills.execution_models import (
     SkillExecutionStatus,
     SkillRunInputs,
 )
+from hermes_ops.skills.execution_path_review import run_execution_path_review
 from hermes_ops.skills.mission_audit import run_mission_audit
 from hermes_ops.skills.policy import SkillPlan, SkillPolicy, plan_skills
 from hermes_ops.skills.registry import discover_skills
@@ -100,6 +101,14 @@ def _dispatch_skill(
         return run_code_audit(target_project if original_target is None else original_target)
     if plan.skills[0].id == "mission-audit":
         return run_mission_audit(target_project if original_target is None else original_target, inputs.mission, inputs.include_paths)
+    if plan.skills[0].id == "execution-path-review":
+        return run_execution_path_review(
+            target_project if original_target is None else original_target,
+            inputs.producer_symbol,
+            inputs.consumer_symbol,
+            include_paths=inputs.include_paths,
+            mission=inputs.mission,
+        )
     raise SkillExecutionError(
         "SKILL_EXECUTION_NOT_SUPPORTED",
         f"Skill '{plan.skills[0].id}' has no execution handler",
@@ -145,12 +154,20 @@ def _run_skill_with_catalog(
             "SKILL_TARGET_INVALID",
             "The explicit target project is not a valid directory",
         ) from exc
-    if skill_id in {"code-audit", "mission-audit"}:
+    if skill_id in {"code-audit", "mission-audit", "execution-path-review"}:
         validate_code_audit_target(project_root)
     if skill_id == "mission-audit" and inputs.mission is None:
         _invalid("mission-audit requires --mission")
-    if skill_id != "mission-audit" and inputs.mission is not None:
-        _invalid("--mission is only valid for mission-audit")
+    if skill_id not in {"mission-audit", "execution-path-review"} and inputs.mission is not None:
+        _invalid("--mission is only valid for mission-audit or execution-path-review")
+    if skill_id == "execution-path-review" and (
+        inputs.producer_symbol is None or inputs.consumer_symbol is None
+    ):
+        _invalid("execution-path-review requires --producer and --consumer")
+    if skill_id != "execution-path-review" and (
+        inputs.producer_symbol is not None or inputs.consumer_symbol is not None
+    ):
+        _invalid("--producer and --consumer are only valid for execution-path-review")
     registry = discover_skills(catalog_root)
     plan = plan_skills(registry, (skill_id,), policy)
     return _dispatch_skill(
@@ -182,7 +199,7 @@ def run_skill(
     if type(inputs) is not SkillRunInputs:
         _invalid("Execution inputs must be SkillRunInputs")
     _validate_execution_context(execution_context)
-    if skill_id in {"code-audit", "mission-audit"}:
+    if skill_id in {"code-audit", "mission-audit", "execution-path-review"}:
         validate_code_audit_target(project_root)
     catalog_root = resolve_own_skill_catalog()
     return _run_skill_with_catalog(

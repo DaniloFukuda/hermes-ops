@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import MISSING, fields
 import json
 import os
 from pathlib import Path
@@ -22,13 +23,25 @@ def _tuple_strings(value: Any) -> tuple[str, ...]:
     return tuple(value)
 
 
-def _exact(value: Any, keys: set[str]) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != keys: _fail("ANALYSIS_PACK_INVALID", "Evidence Pack schema is invalid")
+def _root_contract(value: Any) -> dict[str, Any]:
+    model_fields = fields(MissionEvidencePack)
+    allowed = {field.name for field in model_fields}
+    required = {
+        field.name
+        for field in model_fields
+        if field.default is MISSING and field.default_factory is MISSING
+    }
+    if (
+        not isinstance(value, dict)
+        or not required.issubset(value)
+        or not set(value).issubset(allowed)
+    ):
+        _fail("ANALYSIS_PACK_INVALID", "Evidence Pack schema is invalid")
     return value
 
 
 def parse_evidence_pack(value: Any) -> MissionEvidencePack:
-    root=_exact(value,{"schema_version","mission","target","selection_terms","files","regions","symbols","relationships","related_tests","unresolved_questions","completeness","limitations"})
+    root=_root_contract(value)
     try:
         terms=tuple(SelectionTerm(x["term"],x["source"],_tuple_strings(x["derived_from"]),x["matched_count"]) for x in root["selection_terms"])
         files=tuple(EvidenceFile(x["path"],_tuple_strings(x["roles"]),x["score"],_tuple_strings(x["reasons"])) for x in root["files"])
@@ -38,7 +51,12 @@ def parse_evidence_pack(value: Any) -> MissionEvidencePack:
         tests=tuple(RelatedTest(x["path"],_tuple_strings(x["related_to"]),_tuple_strings(x["reasons"])) for x in root["related_tests"])
         c=root["completeness"]
         completeness=MissionCompleteness(c["status"],_tuple_strings(c["matched_terms"]),_tuple_strings(c["unmatched_terms"]),c["has_active_implementation"],c["has_traceable_relationship"],c["has_related_test"],tuple((str(k),int(v)) for k,v in c["counts"].items()) if isinstance(c["counts"],dict) else tuple((str(k),int(v)) for k,v in c["counts"]),_tuple_strings(c["incompleteness_codes"]))
-        return MissionEvidencePack(root["schema_version"],root["mission"],root["target"],terms,files,regions,symbols,relationships,tests,_tuple_strings(root["unresolved_questions"]),completeness,_tuple_strings(root["limitations"]))
+        structural_scope = (
+            _tuple_strings(root["structural_scope"])
+            if "structural_scope" in root
+            else ()
+        )
+        return MissionEvidencePack(root["schema_version"],root["mission"],root["target"],terms,files,regions,symbols,relationships,tests,_tuple_strings(root["unresolved_questions"]),completeness,_tuple_strings(root["limitations"]),structural_scope)
     except AnalysisError: raise
     except (KeyError, TypeError, ValueError) as exc: raise AnalysisError("ANALYSIS_PACK_INVALID","Evidence Pack values are invalid") from exc
 

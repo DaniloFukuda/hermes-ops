@@ -47,7 +47,9 @@ def build_parser() -> argparse.ArgumentParser:
     skill_run = skill_commands.add_parser("run", allow_abbrev=False)
     skill_run.add_argument("skill_id")
     skill_run.add_argument("--project", required=True, help="Target project path to inspect")
-    skill_run.add_argument("--mission", help="Directed audit mission (mission-audit only)")
+    skill_run.add_argument("--mission", help="Directed mission for mission-audit or execution-path-review")
+    skill_run.add_argument("--producer", help="Producer symbol (execution-path-review only)")
+    skill_run.add_argument("--consumer", help="Consumer symbol (execution-path-review only)")
     skill_run.add_argument(
         "--include-path",
         action="append",
@@ -130,7 +132,14 @@ def _dispatch(command: str, project: str) -> Report:
 
 def _run_skill_cli(args: argparse.Namespace, sanitizer: PublicSanitizer) -> int:
     try:
-        result = run_skill_command(args.project, args.skill_id, args.mission, include_paths=args.include_path)
+        result = run_skill_command(
+            args.project,
+            args.skill_id,
+            args.mission,
+            include_paths=args.include_path,
+            producer_symbol=args.producer,
+            consumer_symbol=args.consumer,
+        )
     except (
         SkillCatalogError,
         SkillContractError,

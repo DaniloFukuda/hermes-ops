@@ -28,6 +28,7 @@ hermes_ops = ["templates/*.toml"]
 "hermes_ops_skill_catalog/skills/git-preflight" = ["skills/git-preflight/SKILL.md"]
 "hermes_ops_skill_catalog/skills/code-audit" = ["skills/code-audit/SKILL.md"]
 "hermes_ops_skill_catalog/skills/mission-audit" = ["skills/mission-audit/SKILL.md"]
+"hermes_ops_skill_catalog/skills/execution-path-review" = ["skills/execution-path-review/SKILL.md"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"
