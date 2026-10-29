@@ -270,6 +270,76 @@ A verificação runtime da versão, autenticação efetiva, isolamento técnico 
 HOME/config/cache, enforcement de rede e enforcement de tools permanecem gaps;
 nenhuma probe externa é executada nesta fase.
 
+### Veredito runtime F5 — Windows / Codex CLI 0.147.0
+
+As probes F5 observaram o binário nativo autorizado:
+
+```text
+C:\\Users\\Danilo\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe
+```
+
+Os shims npm `codex` e `codex.cmd` não foram autorizados para execução pelo
+Hermes Ops. A versão observada foi:
+
+```text
+codex-cli 0.147.0
+```
+
+A interface local comprovadamente expõe `exec`, stdin, JSON, sandbox, approval,
+CWD, permission profile, `CODEX_HOME` e `--ignore-user-config`. Isso prova
+compatibilidade de interface, não certificação de segurança.
+
+A probe do permission profile `:read-only` comprovou, no scratch isolado:
+
+```text
+READ_PERMISSION=PROVEN
+WRITE_DENIAL=PROVEN
+READ_ONLY_FILESYSTEM_ENFORCEMENT=PROVEN
+```
+
+A probe de rede usou baseline TCP para `example.com:80` e a mesma operação com
+`--sandbox-state-disable-network`:
+
+```text
+BASELINE_NETWORK_AVAILABLE=PROVEN
+NETWORK_INTERFACE_ACCEPTED=true
+SANDBOX_NETWORK_DENIAL=FAILED
+network_policy_verified=false
+```
+
+A operação continuou conectando mesmo com a opção de disable-network. Portanto,
+`provider-only` não significa `unrestricted network` e não pode ser marcado como
+política verificada. O contrato exige provar que o Codex acessa somente o
+provider necessário e que comandos/tools filhos não recebem rede irrestrita; o
+segundo requisito falhou na F5-G.
+
+A relocation de `CODEX_HOME` foi observada para as probes locais. Configuração e
+cache foram apenas parcialmente observados; autenticação permanece não provada.
+Tools, process tree e enforcement de rede continuam não comprovados ou falhos.
+
+O veredito normativo da versão é:
+
+```text
+runtime_version_observed = "0.147.0"
+runtime_version_interface_compatible = true
+runtime_version_security_certified = false
+version_validated = false
+capability_ready = false
+classification = "observed_but_not_certified"
+```
+
+Nenhuma faixa normativa de versões, como `>=0.147.0`, é definida por esta
+alteração. `0.147.0` permanece candidata observada, não versão suportada
+certificada.
+
+Próximas alternativas ainda abertas:
+
+- testar uma versão mais nova em isolamento separado;
+- implementar um boundary externo de rede;
+- tomar uma nova decisão humana explícita para relaxar HERMES-0034.
+
+A terceira alternativa não está autorizada nesta fase.
+
 ### AnalysisRequest
 
 O adapter receberá o `AnalysisRequest` imutável da HERMES-0010. Não receberá:
