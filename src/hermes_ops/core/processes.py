@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import locale
 from pathlib import Path
 import subprocess
-from typing import Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 from hermes_ops.core.errors import (
     CheckpointRequired,
@@ -49,6 +49,7 @@ def run_process_with_context(
     category: ExecutionCategory,
     units: int = 1,
     env: Mapping[str, str] | None = None,
+    input_bytes: bytes | None = None,
 ) -> BudgetedProcessResult:
     if type(execution_context) is not ExecutionContext:
         raise TypeError("execution_context must be an ExecutionContext")
@@ -66,7 +67,21 @@ def run_process_with_context(
             "Action would exceed the absolute execution budget"
         )
     next_context = execution_context.consume(category, units)
-    process_result = run_process(args, cwd=cwd, timeout=timeout, env=env)
+    if input_bytes is None:
+        process_result = run_process(
+            args,
+            cwd=cwd,
+            timeout=timeout,
+            env=env,
+        )
+    else:
+        process_result = run_process(
+            args,
+            cwd=cwd,
+            timeout=timeout,
+            env=env,
+            input_bytes=input_bytes,
+        )
     return BudgetedProcessResult(process_result, next_context)
 
 
@@ -76,12 +91,15 @@ def run_process(
     cwd: Path,
     timeout: float,
     env: Mapping[str, str] | None = None,
+    input_bytes: bytes | None = None,
 ) -> ProcessResult:
     if isinstance(args, (str, bytes)) or not args:
         raise ValueError("args must be a non-empty sequence of strings")
     normalized = tuple(str(arg) for arg in args)
     if timeout <= 0:
         raise ValueError("timeout must be greater than zero")
+    normalized_env = _normalize_environment(env)
+    _validate_input_bytes(input_bytes)
 
     requested_cwd = str(cwd)
     try:
@@ -135,8 +153,9 @@ def run_process(
         completed = subprocess.run(
             normalized,
             cwd=explicit_cwd,
+            input=input_bytes,
             timeout=timeout,
-            env=None if env is None else dict(env),
+            env=normalized_env,
             shell=False,
             capture_output=True,
             text=False,
@@ -197,6 +216,26 @@ def run_process(
         True,
         False,
     )
+
+
+def _normalize_environment(
+    env: Mapping[str, str] | None,
+) -> dict[str, str] | None:
+    if env is None:
+        return None
+    if not isinstance(env, Mapping):
+        raise TypeError("env must be a mapping or None")
+    normalized: dict[str, str] = {}
+    for key, value in env.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            raise TypeError("env keys and values must be strings")
+        normalized[key] = value
+    return normalized
+
+
+def _validate_input_bytes(input_bytes: bytes | None) -> None:
+    if input_bytes is not None and not isinstance(input_bytes, bytes):
+        raise TypeError("input_bytes must be bytes or None")
 
 
 def _timeout_text(value: str | bytes | None) -> str:

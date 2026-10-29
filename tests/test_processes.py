@@ -98,3 +98,77 @@ def test_file_cwd_returns_controlled_result(tmp_path: Path) -> None:
     )
     assert not result.started
     assert result.error_code == "cwd_not_directory"
+
+
+def test_empty_stdin_bytes_are_forwarded_as_eof(tmp_path: Path) -> None:
+    result = run_process(
+        (sys.executable, "-c", "import sys; print(len(sys.stdin.buffer.read()))"),
+        cwd=tmp_path,
+        timeout=5,
+        input_bytes=b"",
+    )
+    assert result.succeeded
+    assert result.stdout.strip() == "0"
+
+
+def test_stdin_bytes_with_unicode_content_are_forwarded(tmp_path: Path) -> None:
+    result = run_process(
+        (
+            sys.executable,
+            "-c",
+            "import sys; print(sys.stdin.buffer.read().decode('utf-8'))",
+        ),
+        cwd=tmp_path,
+        timeout=5,
+        input_bytes="entrada olá".encode("utf-8"),
+    )
+    assert result.succeeded
+    assert result.stdout.strip() == "entrada olá"
+
+
+def test_explicit_environment_is_forwarded_without_mutating_input(tmp_path: Path) -> None:
+    environment = {"HERMES_PROCESS_TEST_VALUE": "provided"}
+    result = run_process(
+        (
+            sys.executable,
+            "-c",
+            "import os; print(os.environ['HERMES_PROCESS_TEST_VALUE'])",
+        ),
+        cwd=tmp_path,
+        timeout=5,
+        env=environment,
+    )
+    assert result.succeeded
+    assert result.stdout.strip() == "provided"
+    assert environment == {"HERMES_PROCESS_TEST_VALUE": "provided"}
+
+
+def test_invalid_input_bytes_and_environment_types_are_rejected(tmp_path: Path) -> None:
+    with pytest.raises(TypeError, match="input_bytes"):
+        run_process(
+            (sys.executable, "--version"),
+            cwd=tmp_path,
+            timeout=1,
+            input_bytes="not bytes",  # type: ignore[arg-type]
+        )
+
+    with pytest.raises(TypeError, match="env"):
+        run_process(
+            (sys.executable, "--version"),
+            cwd=tmp_path,
+            timeout=1,
+            env={"HERMES_PROCESS_TEST_VALUE": 1},  # type: ignore[dict-item]
+        )
+
+
+def test_input_and_environment_values_are_not_exposed_in_start_error(tmp_path: Path) -> None:
+    result = run_process(
+        ("missing-hermes-executable",),
+        cwd=tmp_path,
+        timeout=1,
+        input_bytes=b"secret-input",
+        env={"HERMES_SECRET": "secret-value"},
+    )
+    assert not result.started
+    assert "secret-input" not in (result.error or "")
+    assert "secret-value" not in (result.error or "")
