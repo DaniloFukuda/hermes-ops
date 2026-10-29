@@ -172,3 +172,90 @@ def test_input_and_environment_values_are_not_exposed_in_start_error(tmp_path: P
     assert not result.started
     assert "secret-input" not in (result.error or "")
     assert "secret-value" not in (result.error or "")
+
+
+def test_stdout_below_and_at_limit_are_complete(tmp_path: Path) -> None:
+    code = "import sys; sys.stdout.buffer.write(b'abc')"
+    for limit in (3, 4):
+        result = run_process(
+            (sys.executable, "-c", code),
+            cwd=tmp_path,
+            timeout=5,
+            max_stdout_bytes=limit,
+        )
+        assert result.succeeded
+        assert result.stdout == "abc"
+        assert result.stdout_limit_exceeded is False
+
+
+def test_stdout_above_limit_fails_closed_without_partial_output(tmp_path: Path) -> None:
+    result = run_process(
+        (sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'secret-output')"),
+        cwd=tmp_path,
+        timeout=5,
+        max_stdout_bytes=6,
+    )
+    assert result.started
+    assert result.succeeded is False
+    assert result.error_code == "output_limit_exceeded"
+    assert result.stdout_limit_exceeded is True
+    assert result.stderr_limit_exceeded is False
+    assert result.stdout == ""
+    assert "secret-output" not in (result.error or "")
+
+
+def test_stderr_above_limit_is_identified_independently(tmp_path: Path) -> None:
+    result = run_process(
+        (
+            sys.executable,
+            "-c",
+            "import sys; sys.stderr.buffer.write(b'diagnostic-output')",
+        ),
+        cwd=tmp_path,
+        timeout=5,
+        max_stderr_bytes=5,
+    )
+    assert result.error_code == "output_limit_exceeded"
+    assert result.stdout_limit_exceeded is False
+    assert result.stderr_limit_exceeded is True
+    assert result.stdout == ""
+    assert result.stderr == ""
+
+
+def test_both_output_limits_are_identified(tmp_path: Path) -> None:
+    result = run_process(
+        (
+            sys.executable,
+            "-c",
+            "import sys; sys.stdout.buffer.write(b'out'); sys.stderr.buffer.write(b'err')",
+        ),
+        cwd=tmp_path,
+        timeout=5,
+        max_stdout_bytes=2,
+        max_stderr_bytes=2,
+    )
+    assert result.error_code == "output_limit_exceeded"
+    assert result.stdout_limit_exceeded is True
+    assert result.stderr_limit_exceeded is True
+
+
+def test_multibyte_output_limit_is_measured_in_bytes(tmp_path: Path) -> None:
+    result = run_process(
+        (
+            sys.executable,
+            "-c",
+            "import sys; sys.stdout.buffer.write('á'.encode('utf-8'))",
+        ),
+        cwd=tmp_path,
+        timeout=5,
+        max_stdout_bytes=1,
+    )
+    assert result.error_code == "output_limit_exceeded"
+    assert result.stdout_limit_exceeded is True
+
+
+def test_output_limit_validation_rejects_non_positive_and_bool(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="max_stdout_bytes"):
+        run_process((sys.executable, "--version"), cwd=tmp_path, timeout=1, max_stdout_bytes=0)
+    with pytest.raises(TypeError, match="max_stderr_bytes"):
+        run_process((sys.executable, "--version"), cwd=tmp_path, timeout=1, max_stderr_bytes=True)  # type: ignore[arg-type]
