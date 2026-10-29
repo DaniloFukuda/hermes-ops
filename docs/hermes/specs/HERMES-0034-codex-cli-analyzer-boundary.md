@@ -340,6 +340,66 @@ Próximas alternativas ainda abertas:
 
 A terceira alternativa não está autorizada nesta fase.
 
+### Veredito comparativo F5-J — Codex CLI 0.165.0 isolada
+
+A runtime isolada `codex-cli 0.165.0` foi observada no binário nativo do
+pacote instalado separadamente, sem alterar a instalação global `0.147.0`.
+
+Os fatos comparáveis foram:
+
+| Runtime | Baseline de rede | `--sandbox-state-disable-network` | Veredito |
+|---|---|---|---|
+| `0.147.0` | `CONNECTED` | `CONNECTED` | `SANDBOX_NETWORK_DENIAL=FAILED` |
+| `0.165.0` | `CONNECTED` | `CONNECTED` | `SANDBOX_NETWORK_DENIAL=FAILED` |
+
+Para ambas as runtimes:
+
+```text
+BASELINE_NETWORK_AVAILABLE=PROVEN
+NETWORK_INTERFACE_ACCEPTED=true
+network_policy_verified=false
+```
+
+A mudança de `0.147.0` para `0.165.0` não resolveu o network enforcement
+Windows pela rota testada. A hipótese de que uma atualização de versão isolada
+resolveria esse boundary fica rejeitada:
+
+```text
+NETWORK_ENFORCEMENT_VERSION_HYPOTHESIS=REJECTED
+```
+
+O filesystem read-only permanece comprovado nas duas runtimes:
+
+```text
+0.147.0: READ_ONLY_FILESYSTEM_ENFORCEMENT=PROVEN
+0.165.0: READ_ONLY_FILESYSTEM_ENFORCEMENT=PROVEN
+```
+
+Portanto, o sandbox filesystem funciona nas duas versões testadas, mas o deny de
+network não.
+
+Os gates da capability permanecem:
+
+```text
+network_policy_verified=false
+tools_policy_verified=false
+version_validated=false
+capability_ready=false
+```
+
+Nenhuma das versões está security-certified para uso real do adapter sob o
+contrato atual.
+
+A próxima direção preferencial é:
+
+```text
+EXTERNAL_NETWORK_BOUNDARY_REQUIRED_FOR_EVALUATION=true
+```
+
+Isso é uma direção de investigação, não autorização de implementação. Não
+relaxa a exigência de que `provider-only` limite a rede ao provider necessário e
+não concede rede irrestrita a comandos ou tools filhos.
+
 ### AnalysisRequest
 
 O adapter receberá o `AnalysisRequest` imutável da HERMES-0010. Não receberá:
