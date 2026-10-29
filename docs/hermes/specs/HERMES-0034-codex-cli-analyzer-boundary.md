@@ -258,6 +258,18 @@ campos explicitamente validados para `CodexExecutionRequest`, sem derivar CWD de
 `Path.cwd()` ou ambiente de `os.environ`. O adapter ainda não é conectado à CLI
 pública nem a `commands/evidence.py`.
 
+### Estado de implementação da F4
+
+A F4 adiciona `CodexCapabilityConfig` e um resolver explícito que não consulta
+`Path.cwd()`, `os.environ`, PATH ou HOME real. O resolver só produz
+`CodexCapability` quando executável, diretórios, limites, contexto, autenticação,
+versão atestada, allowlist de ambiente e políticas de rede/tools passam todos os
+gates. Caso contrário retorna gaps estruturados sem valores sensíveis.
+
+A verificação runtime da versão, autenticação efetiva, isolamento técnico de
+HOME/config/cache, enforcement de rede e enforcement de tools permanecem gaps;
+nenhuma probe externa é executada nesta fase.
+
 ### AnalysisRequest
 
 O adapter receberá o `AnalysisRequest` imutável da HERMES-0010. Não receberá:
