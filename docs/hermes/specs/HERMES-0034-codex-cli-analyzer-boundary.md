@@ -102,6 +102,54 @@ test = "tests/test_codex_packaging.py::test_wheel_and_sdist_contain_only_approve
 [[acceptance_criteria]]
 id = "AC-31"
 test = "tests/test_codex_packaging.py::test_wheel_and_sdist_contain_no_secrets_or_runtime_artifacts"
+[[acceptance_criteria]]
+id = "AC-32"
+test = "manual:external_network_boundary_parent_child_matrix"
+justification = "Requer política Windows externa e probe autorizada; não é implementado nesta spec Draft."
+[[acceptance_criteria]]
+id = "AC-33"
+test = "manual:external_network_boundary_provider_only_allowlist"
+justification = "Requer validação de provider/broker e endpoints autorizados."
+[[acceptance_criteria]]
+id = "AC-34"
+test = "manual:external_network_boundary_arbitrary_child_denial"
+justification = "A matriz deve cobrir filhos arbitrários sem lista fixa de tools."
+[[acceptance_criteria]]
+id = "AC-35"
+test = "manual:external_network_boundary_direct_connection_denial"
+justification = "Proxy sem bloqueio de socket direto não satisfaz o contrato."
+[[acceptance_criteria]]
+id = "AC-36"
+test = "manual:external_network_boundary_dns_ipv4_ipv6_matrix"
+justification = "DNS, IPv4, IPv6, DoH e DoT exigem probe específica."
+[[acceptance_criteria]]
+id = "AC-37"
+test = "manual:external_network_boundary_fail_closed_and_rollback"
+justification = "Falha de filtro, broker ou política deve bloquear e permitir rollback determinístico."
+[[acceptance_criteria]]
+id = "AC-38"
+test = "manual:external_network_boundary_identity_scope"
+justification = "Requer comprovação de identidade de processo, executável e usuário dedicado."
+[[acceptance_criteria]]
+id = "AC-39"
+test = "manual:external_network_boundary_admin_surface"
+justification = "Privilégio administrativo, serviço e eventual driver precisam ser confirmados."
+[[acceptance_criteria]]
+id = "AC-40"
+test = "manual:external_network_boundary_crash_behavior"
+justification = "Crash do Hermes/Codex não pode reabrir a rede."
+[[acceptance_criteria]]
+id = "AC-41"
+test = "manual:external_network_boundary_auditability"
+justification = "Logs de allow/block e IDs de regras devem ser verificáveis sem secrets."
+[[acceptance_criteria]]
+id = "AC-42"
+test = "manual:external_network_boundary_machine_impact"
+justification = "A probe deve provar que aplicações normais do usuário não são bloqueadas."
+[[acceptance_criteria]]
+id = "AC-43"
+test = "manual:external_network_boundary_candidate_architecture_review"
+justification = "A combinação preferencial continua candidata até a prova Windows isolada."
 +++
 
 # HERMES-0034 — Limite controlado do adapter analisador Codex CLI
@@ -509,6 +557,58 @@ produzem resultado parcial.
 32. Tools não autorizadas serão bloqueadas tecnicamente, não apenas por texto
     no prompt.
 
+### External Network Boundary
+
+A sandbox interna do Codex não satisfaz, sozinha, `network_policy_verified` no
+Windows observado. A capability só poderá ser liberada quando existir um
+boundary externo que cumpra o contrato provider-only:
+
+- o parent Codex acessa somente o provider ou broker autorizado;
+- processos/tools filhos têm rede negada por default;
+- a decisão considera identidade do processo, executável, usuário/contexto
+  dedicado e identidade da conexão outbound;
+- filhos arbitrários como `python.exe`, `powershell.exe`, `cmd.exe`, `curl.exe`
+  e executáveis desconhecidos ou renomeados não recebem rede por default;
+- uma lista fixa de nomes de tools não é suficiente;
+- conexão TCP/UDP direta de filhos permanece bloqueada;
+- proxy por variável de ambiente, sem bloqueio de socket direto, não satisfaz o
+  contrato;
+- quando houver proxy/broker, o parent poderá acessá-lo, mas filhos não terão
+  acesso livre ao broker nem fallback direto;
+- allowlist do provider deve cobrir DNS, IPv4 e IPv6; DoH/DoT e qualquer outra
+  resolução devem possuir política explícita para impedir leakage;
+- falha de firewall/WFP, broker, DNS policy, filtro incompleto, regra ambígua,
+  bypass de proxy ou mismatch de executável/versão bloqueia a capability.
+
+A arquitetura candidata preferencial é:
+
+```text
+dedicated identity/context
+    + WFP/ALE ou Windows Firewall escopado
+    + proxy/broker obrigatório
+    + direct-connect deny
+```
+
+A instalação deve usar IDs determinísticos de filtros/regras, rollback específico
+sem reset global de firewall e comportamento fail-closed após crash do Hermes,
+Codex ou broker. Privilégios administrativos e eventual serviço privilegiado
+podem ser necessários; driver customizado não deve ser exigido sem prova de
+necessidade.
+
+A existência de uma interface de rede ou de um parâmetro de sandbox não prova o
+enforcement. A HERMES-0034 exige uma probe futura com baseline sem policy,
+parent autorizado, filho bloqueado, bypass direto bloqueado, broker/provider
+permitido, IPv4, IPv6, DNS, crash e rollback. Até essa prova, classificar:
+
+```text
+EXTERNAL_NETWORK_BOUNDARY=CANDIDATE_ARCHITECTURE
+network_policy_verified=false
+capability_ready=false
+```
+
+A F6-A concluiu `INSUFFICIENT_EVIDENCE`; nenhuma implementação Windows é
+autorizada por esta seção.
+
 ### Timeout e árvore de processos
 
 33. Timeout positivo será obrigatório.
@@ -723,6 +823,26 @@ provider alternativo ou envio do Evidence Pack integral.
   runtime.
 - **AC-30:** wheel e sdist reproduzem a superfície aprovada em ambiente isolado.
 - **AC-31:** resposta Codex só é exposta após a validação HERMES-0010.
+- **AC-32:** a capability exige um boundary externo de rede provider-only e não
+  libera o Codex com a sandbox interna isoladamente.
+- **AC-33:** o parent pode acessar somente provider/broker autorizado; filhos
+  permanecem deny-by-default.
+- **AC-34:** filhos arbitrários não recebem rede por listas parciais de nomes.
+- **AC-35:** conexão direta de filhos é bloqueada; proxy por env sozinho é
+  insuficiente.
+- **AC-36:** DNS, IPv4, IPv6, DoH e DoT possuem política explícita sem leakage.
+- **AC-37:** falha de filtro, broker, DNS, regra ambígua ou bypass bloqueia e
+  permite rollback determinístico.
+- **AC-38:** a política diferencia identidade de processo, executável, usuário e
+  conexão outbound.
+- **AC-39:** privilégios administrativos e componentes Windows necessários são
+  explicitamente documentados antes da implementação.
+- **AC-40:** crash do Hermes, Codex ou broker não reabre a rede.
+- **AC-41:** filtros/regras possuem IDs e evidência auditável sem secrets.
+- **AC-42:** a probe cobre baseline, parent, filho, bypass, broker/provider,
+  IPv4, IPv6, DNS, crash e rollback.
+- **AC-43:** a arquitetura permanece `CANDIDATE_ARCHITECTURE` até prova Windows
+  isolada; não é classificada como `PROVEN` ou `FEASIBLE` nesta fase.
 
 ## Plano de Testes
 
