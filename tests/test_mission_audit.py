@@ -42,8 +42,85 @@ def test_mission_normalization_is_closed_and_bounded() -> None:
     assert mission == "Auditar emissão lote"
     assert {x.term for x in terms}.issuperset({"emissão", "emissao", "lote"})
     with pytest.raises(SkillExecutionError): normalize_mission("x")
-    with pytest.raises(SkillExecutionError) as caught: normalize_mission(" ".join(f"term{i}" for i in range(25)))
+
+
+def test_mission_character_limit_accepts_3000_and_rejects_3001() -> None:
+    """Spec: HERMES-0035 / AC-01"""
+    accepted = "a" * 3000
+    mission, terms = normalize_mission(accepted)
+    assert mission == accepted
+    assert tuple(item.term for item in terms) == (accepted,)
+
+    with pytest.raises(SkillExecutionError) as caught:
+        normalize_mission("a" * 3001)
+    assert caught.value.code == "SKILL_EXECUTION_INVALID"
+
+
+def test_mission_base_term_limit_accepts_96_and_rejects_97() -> None:
+    """Spec: HERMES-0035 / AC-02"""
+    accepted = " ".join(f"term{index:03d}" for index in range(96))
+    _, terms = normalize_mission(accepted)
+    assert len(terms) == 96
+
+    rejected = " ".join(f"term{index:03d}" for index in range(97))
+    with pytest.raises(SkillExecutionError) as caught:
+        normalize_mission(rejected)
     assert caught.value.code == "MISSION_TERM_LIMIT_EXCEEDED"
+
+
+def test_accent_aliases_do_not_consume_base_term_limit() -> None:
+    """Spec: HERMES-0035 / AC-03"""
+    mission = " ".join(f"término{index:03d}" for index in range(96))
+    _, terms = normalize_mission(mission)
+    assert len(terms) == 192
+    assert sum(item.source == "mission" for item in terms) == 96
+    assert sum(item.source == "accent_alias" for item in terms) == 96
+
+
+def test_selection_terms_have_an_absolute_192_item_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Spec: HERMES-0035 / AC-04"""
+    import hermes_ops.skills.mission_audit as mission_audit
+
+    monkeypatch.setattr(mission_audit, "MAX_BASE_TERMS", 97)
+    mission = " ".join(f"término{index:03d}" for index in range(97))
+    with pytest.raises(SkillExecutionError) as caught:
+        normalize_mission(mission)
+    assert caught.value.code == "MISSION_TERM_LIMIT_EXCEEDED"
+
+
+def test_mission_limit_error_codes_remain_stable() -> None:
+    """Spec: HERMES-0035 / AC-05"""
+    with pytest.raises(SkillExecutionError) as length_error:
+        normalize_mission("a" * 3001)
+    with pytest.raises(SkillExecutionError) as term_error:
+        normalize_mission(" ".join(f"term{index:03d}" for index in range(97)))
+    assert length_error.value.code == "SKILL_EXECUTION_INVALID"
+    assert term_error.value.code == "MISSION_TERM_LIMIT_EXCEEDED"
+
+
+def test_mission_term_limit_keeps_cli_exit_code_two(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Spec: HERMES-0035 / AC-06"""
+    mission = " ".join(f"term{index:03d}" for index in range(97))
+    assert main([
+        "skill", "run", "mission-audit", "--project", str(tmp_path),
+        "--mission", mission,
+    ]) == 2
+    assert "MISSION_TERM_LIMIT_EXCEEDED" in capsys.readouterr().err
+
+
+def test_short_mission_normalization_remains_unchanged() -> None:
+    """Spec: HERMES-0035 / AC-07"""
+    mission, terms = normalize_mission("  Auditar   emissão lote  ")
+    assert mission == "Auditar emissão lote"
+    assert tuple((item.term, item.source) for item in terms) == (
+        ("emissão", "mission"),
+        ("emissao", "accent_alias"),
+        ("lote", "mission"),
+    )
 
 
 def test_no_signals_is_explicitly_insufficient(tmp_path: Path) -> None:

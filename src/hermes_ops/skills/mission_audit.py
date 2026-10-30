@@ -13,7 +13,7 @@ from hermes_ops.skills.controlled_reader import SourceDocument, read_source_docu
 from hermes_ops.skills.execution_models import SkillExecutionEvidence, SkillExecutionResult, SkillExecutionStatus
 from hermes_ops.skills.mission_models import EvidenceFile, EvidenceRegion, EvidenceRelationship, EvidenceSymbol, MissionCompleteness, MissionEvidencePack, RelatedTest, SelectionTerm
 
-MAX_TERMS=24; MAX_SYMBOLS=10_000; MAX_FILES=100; MAX_REGIONS_PER_FILE=12; MAX_REGIONS=300; MAX_PACK_SYMBOLS=300; MAX_RELATIONSHIPS=500; MAX_TESTS=100; MAX_JSON_BYTES=2*1024*1024
+MAX_MISSION_CHARACTERS=3_000; MAX_BASE_TERMS=96; MAX_SELECTION_TERMS=192; MAX_SYMBOLS=10_000; MAX_FILES=100; MAX_REGIONS_PER_FILE=12; MAX_REGIONS=300; MAX_PACK_SYMBOLS=300; MAX_RELATIONSHIPS=500; MAX_TESTS=100; MAX_JSON_BYTES=2*1024*1024
 STOPWORDS=frozenset("a an and as at audit auditar analyze analisar examine examinar de da das do dos e em for from in investigar mission missão o os para por review revisar the to um uma verificar with com fluxo processo sobre código code".split())
 TOKEN=re.compile(r"[^\W_][\w]*", re.UNICODE)
 DEFINITION=re.compile(r"^\s*(?:class|def|async\s+def|function|const|let|var)\s+([A-Za-z_$][\w$]*)", re.MULTILINE)
@@ -100,15 +100,20 @@ def normalize_structural_scope(raw_paths: tuple[str, ...], target_root: Path) ->
 def normalize_mission(value:Any)->tuple[str,tuple[SelectionTerm,...]]:
     if type(value) is not str or "\0" in value or any(ord(c)<32 and not c.isspace() for c in value): _fail("SKILL_EXECUTION_INVALID","Mission must be valid text")
     mission=" ".join(unicodedata.normalize("NFKC",value).split())
-    if not 3<=len(mission)<=500: _fail("SKILL_EXECUTION_INVALID","Mission length must be between 3 and 500 characters")
+    if not 3<=len(mission)<=MAX_MISSION_CHARACTERS: _fail("SKILL_EXECUTION_INVALID",f"Mission length must be between 3 and {MAX_MISSION_CHARACTERS} characters")
     raw=[t.casefold() for t in TOKEN.findall(mission)]
-    terms=[]
+    base_terms=[]
     for token in raw:
         folded=_fold(token)
         if len(token)<3 or token in STOPWORDS or folded in STOPWORDS: continue
+        if token not in base_terms: base_terms.append(token)
+    if len(base_terms)>MAX_BASE_TERMS: _fail("MISSION_TERM_LIMIT_EXCEEDED","Mission has too many significant terms")
+    terms=[]
+    for token in base_terms:
+        folded=_fold(token)
         if token not in terms: terms.append(token)
         if folded!=token and folded not in terms: terms.append(folded)
-    if len(terms)>MAX_TERMS: _fail("MISSION_TERM_LIMIT_EXCEEDED","Mission has too many significant terms")
+    if len(terms)>MAX_SELECTION_TERMS: _fail("MISSION_TERM_LIMIT_EXCEEDED","Mission has too many significant terms")
     return mission,tuple(SelectionTerm(t,"accent_alias" if _fold(t)==t and t not in raw else "mission") for t in terms)
 
 
