@@ -89,7 +89,7 @@ def test_unreadable_code_directory_still_fails_closed(
 def test_reparse_point_is_rejected_before_pytest_pruning(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Spec: HERMES-0008 / AC-47"""
+    """Spec: HERMES-0008 / AC-47, AC-51"""
     artifact = tmp_path / ".pytest_tmp"
     artifact.mkdir()
     real_lstat = os.lstat
@@ -108,6 +108,35 @@ def test_reparse_point_is_rejected_before_pytest_pruning(
         read_source_documents(tmp_path)
 
     assert _error_code(caught) == "CODE_AUDIT_UNSAFE_PATH"
+    assert ".pytest_tmp" in str(caught.value)
+    assert str(tmp_path) not in str(caught.value)
+
+
+def test_unsafe_path_error_names_only_sanitized_relative_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Spec: HERMES-0008 / AC-50"""
+    offending = _write(tmp_path, "nested/offending.py")
+    real_lstat = os.lstat
+
+    def guarded_lstat(path: os.PathLike[str] | str):
+        if Path(path) == offending:
+            metadata = real_lstat(path)
+            return SimpleNamespace(
+                st_mode=metadata.st_mode,
+                st_file_attributes=controlled_reader._REPARSE,
+            )
+        return real_lstat(path)
+
+    monkeypatch.setattr(os, "lstat", guarded_lstat)
+
+    with pytest.raises(SkillExecutionError) as caught:
+        read_source_documents(tmp_path)
+
+    message = str(caught.value)
+    assert _error_code(caught) == "CODE_AUDIT_UNSAFE_PATH"
+    assert "nested/offending.py" in message
+    assert str(tmp_path) not in message
 
 
 def test_pruning_preserves_deterministic_document_order(tmp_path: Path) -> None:

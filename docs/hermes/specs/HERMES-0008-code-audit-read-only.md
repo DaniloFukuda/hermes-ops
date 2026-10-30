@@ -4,7 +4,7 @@ title = "Code audit read-only com evidências"
 status = "Implementado"
 owners = ["Danilo"]
 created = "2026-08-11"
-updated = "2026-09-02"
+updated = "2026-10-30"
 supersedes = []
 related = ["HERMES-0004", "HERMES-0005", "HERMES-0006", "HERMES-0007"]
 
@@ -203,13 +203,29 @@ test = "tests/test_controlled_reader.py::test_pruning_preserves_deterministic_do
 [[acceptance_criteria]]
 id = "AC-49"
 test = "tests/test_controlled_reader.py::test_pruning_preserves_structural_and_file_limits"
+
+[[acceptance_criteria]]
+id = "AC-50"
+test = "tests/test_controlled_reader.py::test_unsafe_path_error_names_only_sanitized_relative_entry"
+
+[[acceptance_criteria]]
+id = "AC-51"
+test = "tests/test_controlled_reader.py::test_reparse_point_is_rejected_before_pytest_pruning"
 +++
 
 # HERMES-0008 - Code audit read-only com evidências
 
 ## Status
 
-Implementado e validado em 2026-08-11.
+Implementado e validado, incluindo a atualização diagnóstica de 2026-10-30.
+A política de bloqueio permanece inalterada.
+
+Evidência da atualização de 2026-10-30:
+
+- testes focados: `100 passed, 3 skipped`;
+- suíte completa: `948 passed, 11 skipped`;
+- os skips são fixtures portáteis já previstas, principalmente symlinks sem
+  privilégio de criação no Windows; o teste determinístico de reparse passou.
 
 ## Resumo para o Responsável
 
@@ -596,6 +612,12 @@ diretório ou abrir um arquivo:
 3. no Windows, rejeitar qualquer reparse point;
 4. aceitar somente diretório regular ou arquivo regular conforme o estágio;
 5. manter o path relativo derivado da árvore já validada.
+
+Quando uma entrada descendente for bloqueada como symlink ou reparse point, o
+erro inclui somente esse path relativo já validado, normalizado com `/`. O erro
+jamais inclui o path absoluto do TARGET. Se o path relativo não puder ser
+validado, a leitura continua bloqueada e usa a mensagem genérica, sem ecoar o
+valor inseguro.
 
 Não se usa glob recursivo que possa atravessar indirections. Não se segue
 atalho nem para um destino interno.
@@ -1092,6 +1114,11 @@ mesma condição.
   documentos restantes.
 - **AC-49:** os limites estruturais, de arquivos e bytes permanecem ativos; o
   conteúdo descendente de diretório podado não é enumerado nem contado.
+- **AC-50:** `CODE_AUDIT_UNSAFE_PATH` identifica a entrada ofensiva somente por
+  path relativo POSIX validado e não expõe o path absoluto do TARGET.
+- **AC-51:** a melhoria diagnóstica não altera a política fail-closed: symlink,
+  junction ou qualquer reparse point descendente continua bloqueando sem ser
+  seguido e com o mesmo código estável.
 
 Cada AC possui teste automatizado planejado no front matter. O componente de
 “risco realmente relacionado à missão” em AC-42 também exige revisão humana da

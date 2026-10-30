@@ -180,6 +180,8 @@ def test_descendant_symlink_or_reparse_point_blocks_the_scan(tmp_path: Path) -> 
         with pytest.raises(SkillExecutionError) as caught:
             run_code_audit(tmp_path)
         assert _error_code(caught) == "CODE_AUDIT_UNSAFE_PATH"
+        assert "linked.py" in str(caught.value)
+        assert str(tmp_path) not in str(caught.value)
     finally:
         outside.unlink(missing_ok=True)
 

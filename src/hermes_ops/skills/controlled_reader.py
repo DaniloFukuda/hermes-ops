@@ -106,9 +106,17 @@ def _metadata(path: Path, code: str = "CODE_AUDIT_READ_FAILED") -> os.stat_resul
         raise SkillExecutionError(code, "A controlled-reader path could not be inspected") from exc
 
 
-def _reject(metadata: os.stat_result, code: str = "CODE_AUDIT_UNSAFE_PATH") -> None:
+def _reject(
+    metadata: os.stat_result,
+    code: str = "CODE_AUDIT_UNSAFE_PATH",
+    *,
+    relative: str | None = None,
+) -> None:
     if stat.S_ISLNK(metadata.st_mode) or getattr(metadata, "st_file_attributes", 0) & _REPARSE:
-        _fail(code, "Controlled reading does not follow filesystem indirections")
+        message = "Controlled reading does not follow filesystem indirections"
+        if code == "CODE_AUDIT_UNSAFE_PATH" and relative is not None and valid_relative_path(relative):
+            message = f"{message}: {relative}"
+        _fail(code, message)
 
 
 def _is_excluded_directory(name: str) -> bool:
@@ -214,7 +222,7 @@ def _inventory(root: Path, *, max_depth: int, max_directories: int, max_files: i
         for entry in entries:
             relative = _relative(root, entry)
             metadata = _metadata(entry)
-            _reject(metadata)
+            _reject(metadata, relative=relative)
             if stat.S_ISDIR(metadata.st_mode):
                 directories += 1
                 if directories > max_directories:
