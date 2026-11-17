@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import locale
 from pathlib import Path
 import subprocess
-from typing import Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 from hermes_ops.core.errors import (
     CheckpointRequired,
@@ -28,10 +28,18 @@ class ProcessResult:
     timed_out: bool
     error: str | None = None
     error_code: str | None = None
+    stdout_limit_exceeded: bool = False
+    stderr_limit_exceeded: bool = False
 
     @property
     def succeeded(self) -> bool:
-        return self.started and not self.timed_out and self.returncode == 0
+        return (
+            self.started
+            and not self.timed_out
+            and self.returncode == 0
+            and not self.stdout_limit_exceeded
+            and not self.stderr_limit_exceeded
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +57,9 @@ def run_process_with_context(
     category: ExecutionCategory,
     units: int = 1,
     env: Mapping[str, str] | None = None,
+    input_bytes: bytes | None = None,
+    max_stdout_bytes: int | None = None,
+    max_stderr_bytes: int | None = None,
 ) -> BudgetedProcessResult:
     if type(execution_context) is not ExecutionContext:
         raise TypeError("execution_context must be an ExecutionContext")
@@ -66,7 +77,27 @@ def run_process_with_context(
             "Action would exceed the absolute execution budget"
         )
     next_context = execution_context.consume(category, units)
-    process_result = run_process(args, cwd=cwd, timeout=timeout, env=env)
+    if (
+        input_bytes is None
+        and max_stdout_bytes is None
+        and max_stderr_bytes is None
+    ):
+        process_result = run_process(
+            args,
+            cwd=cwd,
+            timeout=timeout,
+            env=env,
+        )
+    else:
+        process_result = run_process(
+            args,
+            cwd=cwd,
+            timeout=timeout,
+            env=env,
+            input_bytes=input_bytes,
+            max_stdout_bytes=max_stdout_bytes,
+            max_stderr_bytes=max_stderr_bytes,
+        )
     return BudgetedProcessResult(process_result, next_context)
 
 
@@ -76,12 +107,19 @@ def run_process(
     cwd: Path,
     timeout: float,
     env: Mapping[str, str] | None = None,
+    input_bytes: bytes | None = None,
+    max_stdout_bytes: int | None = None,
+    max_stderr_bytes: int | None = None,
 ) -> ProcessResult:
     if isinstance(args, (str, bytes)) or not args:
         raise ValueError("args must be a non-empty sequence of strings")
     normalized = tuple(str(arg) for arg in args)
     if timeout <= 0:
         raise ValueError("timeout must be greater than zero")
+    normalized_env = _normalize_environment(env)
+    _validate_input_bytes(input_bytes)
+    _validate_output_limit("max_stdout_bytes", max_stdout_bytes)
+    _validate_output_limit("max_stderr_bytes", max_stderr_bytes)
 
     requested_cwd = str(cwd)
     try:
@@ -135,8 +173,9 @@ def run_process(
         completed = subprocess.run(
             normalized,
             cwd=explicit_cwd,
+            input=input_bytes,
             timeout=timeout,
-            env=None if env is None else dict(env),
+            env=normalized_env,
             shell=False,
             capture_output=True,
             text=False,
@@ -154,17 +193,25 @@ def run_process(
             "executable_not_found",
         )
     except subprocess.TimeoutExpired as exc:
-        stdout = _timeout_text(exc.stdout)
-        stderr = _timeout_text(exc.stderr)
+        stdout_bytes = _output_bytes(exc.stdout)
+        stderr_bytes = _output_bytes(exc.stderr)
+        stdout_exceeded, stderr_exceeded = _output_limit_flags(
+            stdout_bytes,
+            stderr_bytes,
+            max_stdout_bytes,
+            max_stderr_bytes,
+        )
         return ProcessResult(
             str(explicit_cwd),
             None,
-            stdout,
-            stderr,
+            "" if stdout_exceeded else _decode_output(stdout_bytes),
+            "" if stderr_exceeded else _decode_output(stderr_bytes),
             True,
             True,
             f"Process exceeded timeout of {timeout} seconds",
             "timeout",
+            stdout_exceeded,
+            stderr_exceeded,
         )
     except PermissionError:
         return ProcessResult(
@@ -189,13 +236,84 @@ def run_process(
             "process_start_failed",
         )
 
+    stdout_bytes = _output_bytes(completed.stdout)
+    stderr_bytes = _output_bytes(completed.stderr)
+    stdout_exceeded, stderr_exceeded = _output_limit_flags(
+        stdout_bytes,
+        stderr_bytes,
+        max_stdout_bytes,
+        max_stderr_bytes,
+    )
+    if stdout_exceeded or stderr_exceeded:
+        return ProcessResult(
+            str(explicit_cwd),
+            completed.returncode,
+            "",
+            "",
+            True,
+            False,
+            "Process output exceeded configured byte limit",
+            "output_limit_exceeded",
+            stdout_exceeded,
+            stderr_exceeded,
+        )
+
     return ProcessResult(
         str(explicit_cwd),
         completed.returncode,
-        _decode_output(completed.stdout),
-        _decode_output(completed.stderr),
+        _decode_output(stdout_bytes),
+        _decode_output(stderr_bytes),
         True,
         False,
+    )
+
+
+def _normalize_environment(
+    env: Mapping[str, str] | None,
+) -> dict[str, str] | None:
+    if env is None:
+        return None
+    if not isinstance(env, Mapping):
+        raise TypeError("env must be a mapping or None")
+    normalized: dict[str, str] = {}
+    for key, value in env.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            raise TypeError("env keys and values must be strings")
+        normalized[key] = value
+    return normalized
+
+
+def _validate_input_bytes(input_bytes: bytes | None) -> None:
+    if input_bytes is not None and not isinstance(input_bytes, bytes):
+        raise TypeError("input_bytes must be bytes or None")
+
+
+def _validate_output_limit(name: str, limit: int | None) -> None:
+    if limit is None:
+        return
+    if type(limit) is not int:
+        raise TypeError(f"{name} must be a positive integer or None")
+    if limit <= 0:
+        raise ValueError(f"{name} must be positive")
+
+
+def _output_bytes(value: str | bytes | None) -> bytes:
+    if value is None:
+        return b""
+    if isinstance(value, bytes):
+        return value
+    return value.encode("utf-8", errors="replace")
+
+
+def _output_limit_flags(
+    stdout: bytes,
+    stderr: bytes,
+    max_stdout_bytes: int | None,
+    max_stderr_bytes: int | None,
+) -> tuple[bool, bool]:
+    return (
+        max_stdout_bytes is not None and len(stdout) > max_stdout_bytes,
+        max_stderr_bytes is not None and len(stderr) > max_stderr_bytes,
     )
 
 

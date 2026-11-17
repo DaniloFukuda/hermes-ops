@@ -15,7 +15,7 @@ from hermes_ops.skills.execution_models import (
     SkillExecutionResult,
     SkillExecutionStatus,
 )
-from hermes_ops.skills.controlled_reader import read_source_documents
+from hermes_ops.skills.controlled_reader import SourceDocument, read_source_documents
 
 
 ALLOWED_EXTENSIONS = frozenset(
@@ -184,6 +184,12 @@ class CodeAuditSummary:
             _fail("CODE_AUDIT_INVALID_FINDING", "Code audit summary rules are invalid")
         if self.extensions != tuple(sorted(ALLOWED_EXTENSIONS)):
             _fail("CODE_AUDIT_INVALID_FINDING", "Code audit summary extensions are invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class CodeAuditAnalysis:
+    summary: CodeAuditSummary
+    findings: tuple[CodeAuditFinding, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -583,11 +589,16 @@ def _summary(directories: int, files: int, bytes_read: int, findings: tuple[Code
     )
 
 
-def run_code_audit(target_project: Any) -> SkillExecutionResult:
-    inventory = read_source_documents(target_project, max_depth=MAX_DEPTH, max_directories=MAX_DIRECTORIES, max_files=MAX_FILES, max_file_bytes=MAX_FILE_BYTES, max_total_bytes=MAX_TOTAL_BYTES)
+def audit_code_documents(
+    documents: tuple[SourceDocument, ...], directories: int
+) -> CodeAuditAnalysis:
+    if type(documents) is not tuple or any(type(item) is not SourceDocument for item in documents):
+        _fail("CODE_AUDIT_INVALID_INPUT", "Code audit core requires source documents")
+    if type(directories) is not int or directories < 0:
+        _fail("CODE_AUDIT_INVALID_INPUT", "Code audit directory count is invalid")
     findings: list[CodeAuditFinding] = []
     bytes_read = 0
-    for document in inventory.documents:
+    for document in documents:
         bytes_read += document.bytes_read
         if bytes_read > MAX_TOTAL_BYTES:
             _fail("CODE_AUDIT_TOTAL_SIZE_EXCEEDED", "Code audit total size limit exceeded")
@@ -600,7 +611,12 @@ def run_code_audit(target_project: Any) -> SkillExecutionResult:
             item.file, item.region.start_line, item.region.start_column or 0, item.rule_id
         ),
     ))
-    summary = _summary(inventory.directories, len(inventory.documents), bytes_read, ordered)
+    summary = _summary(directories, len(documents), bytes_read, ordered)
+    return CodeAuditAnalysis(summary, ordered)
+
+
+def _code_audit_result(analysis: CodeAuditAnalysis) -> SkillExecutionResult:
+    ordered, summary = analysis.findings, analysis.summary
     evidence = [SkillExecutionEvidence(
         "code_audit_summary", Status.OK, "Code audit scan completed.", summary, "ok"
     )]
@@ -614,3 +630,8 @@ def run_code_audit(target_project: Any) -> SkillExecutionResult:
     status = SkillExecutionStatus.PASSED if not ordered else SkillExecutionStatus.COMPLETED_WITH_FINDINGS
     exit_code = 0 if not ordered else 3
     return SkillExecutionResult("code-audit", status, exit_code, tuple(evidence))
+
+
+def run_code_audit(target_project: Any) -> SkillExecutionResult:
+    inventory = read_source_documents(target_project, max_depth=MAX_DEPTH, max_directories=MAX_DIRECTORIES, max_files=MAX_FILES, max_file_bytes=MAX_FILE_BYTES, max_total_bytes=MAX_TOTAL_BYTES)
+    return _code_audit_result(audit_code_documents(inventory.documents, inventory.directories))

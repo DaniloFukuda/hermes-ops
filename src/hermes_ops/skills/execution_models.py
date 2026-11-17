@@ -57,10 +57,19 @@ class SkillExecutionStatus(str, Enum):
 @dataclass(frozen=True, slots=True)
 class SkillRunInputs:
     mission: str | None = None
+    include_paths: tuple[str, ...] = ()
+    producer_symbol: str | None = None
+    consumer_symbol: str | None = None
 
     def __post_init__(self) -> None:
         if self.mission is not None and type(self.mission) is not str:
             _invalid("Mission input must be a string")
+        if type(self.include_paths) is not tuple or any(type(p) is not str for p in self.include_paths):
+            _invalid("include_paths must be a tuple of strings")
+        if self.producer_symbol is not None and type(self.producer_symbol) is not str:
+            _invalid("Producer symbol input must be a string")
+        if self.consumer_symbol is not None and type(self.consumer_symbol) is not str:
+            _invalid("Consumer symbol input must be a string")
 
 
 @dataclass(frozen=True, slots=True)

@@ -4,6 +4,7 @@ from typing import Any
 
 from hermes_ops.analysis.adapter import RawAnalysisResponse
 from hermes_ops.analysis.builder import analysis_request_hash
+from hermes_ops.analysis.loader import validate_omission_provenance
 from hermes_ops.analysis.models import AnalysisClaim, AnalysisRequest, AnalysisResult
 from hermes_ops.core.errors import AnalysisError
 
@@ -16,7 +17,20 @@ def validate_analysis_response(raw:RawAnalysisResponse,request:AnalysisRequest)-
     value=raw.value
     if set(value)!={"schema_version","claims","overall_classification","limitations"} or value["schema_version"]!=1: _fail("Response schema is invalid")
     if value["overall_classification"] not in CLASSIFICATIONS or not isinstance(value["claims"],list): _fail("Response classification is invalid")
-    pack=request.analysis_pack; rows=(*pack.files,*pack.regions,*pack.symbols,*pack.relationships,*pack.tests); objects={dict(row)["id"]:dict(row) for row in rows}; claims=[]
+    pack=request.analysis_pack
+    if pack.source_schema_version not in (1, 2): _fail("ANALYSIS_RESPONSE_INVALID", "Unsupported Evidence Pack schema version")
+    provenance=getattr(pack,"omission_provenance",())
+    try:
+        validate_omission_provenance(
+            provenance,
+            pack.regions,
+            completeness_status=pack.source_completeness,
+            limitations=pack.source_limitations,
+            file_paths={dict(row)["id"]:dict(row)["path"] for row in pack.files},
+        )
+    except AnalysisError as exc:
+        _fail(str(exc))
+    rows=(*pack.files,*pack.regions,*pack.symbols,*pack.relationships,*pack.tests); objects={dict(row)["id"]:dict(row) for row in rows}; claims=[]
     for item in value["claims"]:
         if not isinstance(item,dict) or set(item)!={"id","statement","classification","evidence_ids","contrary_evidence_ids","rationale","limitations"}: _fail("Claim schema is invalid")
         classification=item["classification"]

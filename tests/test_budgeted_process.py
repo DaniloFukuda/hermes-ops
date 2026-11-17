@@ -284,3 +284,153 @@ def test_wrapper_adds_no_network_or_filesystem_before_legacy_boundary(
 
     assert len(calls) == 1
     assert calls[0][1] == Path("unresolved-and-unread")
+
+
+def test_new_process_inputs_are_forwarded_after_budget_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_process(
+        args: object,
+        *,
+        cwd: Path,
+        timeout: float,
+        env: object = None,
+        input_bytes: bytes | None = None,
+        max_stdout_bytes: int | None = None,
+        max_stderr_bytes: int | None = None,
+    ) -> ProcessResult:
+        captured.update(
+            args=args,
+            cwd=cwd,
+            timeout=timeout,
+            env=env,
+            input_bytes=input_bytes,
+        )
+        return process_result()
+
+    monkeypatch.setattr("hermes_ops.core.processes.run_process", fake_run_process)
+    environment = {"HERMES_BUDGET_TEST": "value"}
+    before = context()
+
+    result = run_process_with_context(
+        ("tool", "arg with spaces"),
+        cwd=Path("work"),
+        timeout=1,
+        execution_context=before,
+        category=ExecutionCategory.VALIDATION,
+        input_bytes=b"controlled input",
+        env=environment,
+    )
+
+    assert result.execution_context.budget.used_units == 1
+    assert captured == {
+        "args": ("tool", "arg with spaces"),
+        "cwd": Path("work"),
+        "timeout": 1,
+        "env": environment,
+        "input_bytes": b"controlled input",
+    }
+    assert environment == {"HERMES_BUDGET_TEST": "value"}
+
+
+def test_budget_block_prevents_process_with_new_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[object] = []
+
+    def forbidden_process(*args: object, **kwargs: object) -> ProcessResult:
+        calls.append((args, kwargs))
+        return process_result()
+
+    monkeypatch.setattr("hermes_ops.core.processes.run_process", forbidden_process)
+    before = context(used=5)
+    secret = b"budget-secret-input"
+
+    with pytest.raises(CheckpointRequired) as caught:
+        run_process_with_context(
+            ("tool",),
+            cwd=Path("work"),
+            timeout=1,
+            execution_context=before,
+            category=ExecutionCategory.EXPLORATION,
+            input_bytes=secret,
+            env={"HERMES_SECRET": "secret-value"},
+        )
+
+    assert calls == []
+    assert before.budget.used_units == 5
+    assert "budget-secret-input" not in str(caught.value)
+    assert "secret-value" not in str(caught.value)
+
+
+def test_output_limits_are_forwarded_after_budget_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_process(
+        args: object,
+        *,
+        cwd: Path,
+        timeout: float,
+        env: object = None,
+        input_bytes: bytes | None = None,
+        max_stdout_bytes: int | None = None,
+        max_stderr_bytes: int | None = None,
+    ) -> ProcessResult:
+        captured.update(
+            args=args,
+            env=env,
+            input_bytes=input_bytes,
+            max_stdout_bytes=max_stdout_bytes,
+            max_stderr_bytes=max_stderr_bytes,
+        )
+        return process_result()
+
+    monkeypatch.setattr("hermes_ops.core.processes.run_process", fake_run_process)
+    result = run_process_with_context(
+        ("tool",),
+        cwd=Path("work"),
+        timeout=1,
+        execution_context=context(),
+        category=ExecutionCategory.VALIDATION,
+        input_bytes=b"input",
+        env={"KEY": "value"},
+        max_stdout_bytes=100,
+        max_stderr_bytes=50,
+    )
+
+    assert result.execution_context.budget.used_units == 1
+    assert captured["input_bytes"] == b"input"
+    assert captured["env"] == {"KEY": "value"}
+    assert captured["max_stdout_bytes"] == 100
+    assert captured["max_stderr_bytes"] == 50
+
+
+def test_output_limit_budget_block_prevents_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[object] = []
+
+    def forbidden_process(*args: object, **kwargs: object) -> ProcessResult:
+        calls.append((args, kwargs))
+        return process_result()
+
+    monkeypatch.setattr("hermes_ops.core.processes.run_process", forbidden_process)
+    before = context(used=5)
+
+    with pytest.raises(CheckpointRequired):
+        run_process_with_context(
+            ("tool",),
+            cwd=Path("work"),
+            timeout=1,
+            execution_context=before,
+            category=ExecutionCategory.EXPLORATION,
+            max_stdout_bytes=100,
+            max_stderr_bytes=50,
+        )
+
+    assert calls == []
+    assert before.budget.used_units == 5

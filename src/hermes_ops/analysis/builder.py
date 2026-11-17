@@ -9,6 +9,7 @@ import unicodedata
 from typing import Any
 
 from hermes_ops.analysis.models import AnalysisPack, AnalysisRequest, ContextBudget, FrozenObject, OmissionSummary
+from hermes_ops.analysis.loader import validate_omission_provenance
 from hermes_ops.core.errors import AnalysisError
 from hermes_ops.skills.mission_models import MissionEvidencePack
 
@@ -22,7 +23,13 @@ _QUESTION_STOPWORDS=frozenset("a an and are as at be by com da das de do dos e e
 
 def _fail(code:str,message:str)->None: raise AnalysisError(code,message)
 def _plain(value:Any)->Any:
-    if is_dataclass(value) and not isinstance(value,type): return {f.name:_plain(getattr(value,f.name)) for f in fields(value)}
+    if is_dataclass(value) and not isinstance(value,type):
+        result={}
+        for field in fields(value):
+            try: current=getattr(value,field.name)
+            except AttributeError: continue
+            result[field.name]=_plain(current)
+        return result
     if isinstance(value,tuple):
         if value and all(isinstance(x,tuple) and len(x)==2 and isinstance(x[0],str) for x in value): return {k:_plain(v) for k,v in value}
         return [_plain(x) for x in value]
@@ -57,6 +64,14 @@ def _source_dict(pack:MissionEvidencePack)->dict[str,Any]: return _plain(pack)
 
 def build_analysis_request(pack:MissionEvidencePack,question:Any,budget_chars:Any)->tuple[AnalysisRequest,str]:
     if type(pack) is not MissionEvidencePack: _fail("ANALYSIS_PACK_INVALID","A validated MissionEvidencePack is required")
+    provenance=getattr(pack,"omission_provenance",())
+    validate_omission_provenance(
+        provenance,
+        pack.regions,
+        completeness_status=pack.completeness.status,
+        incompleteness_codes=pack.completeness.incompleteness_codes,
+        limitations=pack.limitations,
+    )
     question_text=_question(question)
     if type(budget_chars) is not int or not MIN_BUDGET<=budget_chars<=MAX_BUDGET: _fail("ANALYSIS_BUDGET_INVALID","Context budget must be between 4000 and 200000")
     for item in (*pack.files,*pack.regions,*pack.symbols,*pack.related_tests):
@@ -157,7 +172,8 @@ def build_analysis_request(pack:MissionEvidencePack,question:Any,budget_chars:An
         omissions=OmissionSummary(*counts,digest,("CONTEXT_BUDGET",) if omitted_ids else ())
         reductions=("CONTEXT_BUDGET_OMISSIONS",) if omitted_ids else ()
         empty_budget=ContextBudget(budget_chars,0,budget_chars,0,not omitted_ids)
-        analysis=AnalysisPack(1,pack.schema_version,source_hash,_clean(pack.mission)[0],question_text,pack.completeness.status,selected_files,tuple(regions_selected),selected_symbols,tuple(selected_rel),selected_tests,base_limitations,reductions,omissions,empty_budget)
+        provenance_rows=tuple(_frozen(omission_id=item.omission_id,omitted_region=item.omitted_region,equivalent_region=item.equivalent_region,content_kind=item.content_kind,reasons=item.reasons,associated_terms=item.associated_terms,classification=item.classification,cap=item.cap,justification=item.justification) for item in provenance)
+        analysis=AnalysisPack(1,pack.schema_version,source_hash,_clean(pack.mission)[0],question_text,pack.completeness.status,selected_files,tuple(regions_selected),selected_symbols,tuple(selected_rel),selected_tests,base_limitations,reductions,omissions,empty_budget,provenance_rows)
         request=AnalysisRequest(1,INSTRUCTIONS,analysis)
         for _ in range(8):
             raw=canonical_json(request); used=len(raw); report=ContextBudget(budget_chars,used,max(0,budget_chars-used),len(raw.encode("utf-8")),not omitted_ids)

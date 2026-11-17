@@ -358,7 +358,7 @@ FUNÇÃO classificar_status_para_comando(state, config):
 | compileall | `python -m compileall src/hermes_ops` → OK (sem erros de sintaxe) |
 | Empacotamento | `python -m build` → OK (wheel + sdist criados localmente) |
 | git diff --check | Sem avisos |
-| Plataformas validadas | Windows 10 (Python 3.13.13, venv `C:\Users\Danilo\Projeto\hermes-ops\.venv\Scripts\python.exe`) |
+| Plataformas validadas | Windows 10 (Python 3.13.13, venv `.venv\Scripts\python.exe`) |
 | Limitações do ambiente | Symlinks indisponíveis no Windows CI padrão; 2 testes skipped (`test_configuration_file_symlink_is_rejected`, `test_external_symlink_is_rejected`) |
 
 ## Histórico de Alterações

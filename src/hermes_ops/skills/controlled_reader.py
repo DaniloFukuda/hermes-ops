@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import json
 import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
@@ -11,6 +13,7 @@ from hermes_ops.core.errors import SkillExecutionError
 
 ALLOWED_EXTENSIONS = frozenset({".py", ".pyi", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"})
 EXCLUDED_DIRECTORIES = frozenset({".git", ".hg", ".svn", ".venv", "venv", "node_modules", "vendor", "dist", "build", "coverage", "__pycache__", ".mypy_cache", ".pytest_cache", ".tox", ".nox"})
+_VERSIONED_VENV = re.compile(r"\.venv[0-9]+\Z")
 MAX_DEPTH = 32
 MAX_DIRECTORIES = 5_000
 MAX_FILES = 1_000
@@ -32,6 +35,52 @@ class SourceInventory:
     root: Path
     directories: int
     documents: tuple[SourceDocument, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SourceLimits:
+    max_depth: int
+    max_directories: int
+    max_files: int
+    max_file_bytes: int
+    max_total_bytes: int
+
+
+@dataclass(frozen=True, slots=True)
+class ScopedSourceSnapshot:
+    schema_version: int
+    structural_scope: tuple[str, ...]
+    documents: tuple[SourceDocument, ...]
+    directories: int
+    applied_limits: SourceLimits
+    limitations: tuple[str, ...]
+    digest: str
+
+
+def _snapshot_digest(
+    structural_scope: tuple[str, ...],
+    documents: tuple[SourceDocument, ...],
+    limits: SourceLimits,
+) -> str:
+    logical = {
+        "schema_version": 1,
+        "structural_scope": list(structural_scope),
+        "documents": [
+            {"path": item.path, "text": item.text}
+            for item in sorted(documents, key=lambda item: item.path)
+        ],
+        "applied_limits": {
+            "max_depth": limits.max_depth,
+            "max_directories": limits.max_directories,
+            "max_files": limits.max_files,
+            "max_file_bytes": limits.max_file_bytes,
+            "max_total_bytes": limits.max_total_bytes,
+        },
+    }
+    encoded = json.dumps(
+        logical, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,9 +106,25 @@ def _metadata(path: Path, code: str = "CODE_AUDIT_READ_FAILED") -> os.stat_resul
         raise SkillExecutionError(code, "A controlled-reader path could not be inspected") from exc
 
 
-def _reject(metadata: os.stat_result, code: str = "CODE_AUDIT_UNSAFE_PATH") -> None:
+def _reject(
+    metadata: os.stat_result,
+    code: str = "CODE_AUDIT_UNSAFE_PATH",
+    *,
+    relative: str | None = None,
+) -> None:
     if stat.S_ISLNK(metadata.st_mode) or getattr(metadata, "st_file_attributes", 0) & _REPARSE:
-        _fail(code, "Controlled reading does not follow filesystem indirections")
+        message = "Controlled reading does not follow filesystem indirections"
+        if code == "CODE_AUDIT_UNSAFE_PATH" and relative is not None and valid_relative_path(relative):
+            message = f"{message}: {relative}"
+        _fail(code, message)
+
+
+def _is_excluded_directory(name: str) -> bool:
+    return (
+        name in EXCLUDED_DIRECTORIES
+        or name.startswith(".pytest_")
+        or _VERSIONED_VENV.fullmatch(name) is not None
+    )
 
 
 def validate_target(value: str | Path) -> Path:
@@ -99,10 +164,54 @@ def _relative(root: Path, path: Path) -> str:
     return value
 
 
-def _inventory(root: Path, *, max_depth: int, max_directories: int, max_files: int, max_file_bytes: int, max_total_bytes: int) -> tuple[tuple[_Candidate, ...], int]:
-    directories, candidates, stack = 1, [], [(root, 0)]
+def _is_path_allowed(relative: str, allowed_paths: tuple[str, ...], target_root: Path) -> bool:
+    """Check if a relative path is within allowed paths.
+
+    For directories: if the path is a prefix of any allowed path, it must be traversed
+    (it's an ancestor of something in scope). If it's within an allowed directory scope,
+    it's allowed.
+
+    For files: exact match only (no prefix matching).
+
+    Case-insensitive comparison for Windows compatibility.
+    """
+    if not allowed_paths:
+        return True
+
+    # Normalize for case-insensitive comparison (Windows)
+    relative_lower = relative.lower()
+
+    for allowed in allowed_paths:
+        # Determine if allowed path is a directory or file
+        allowed_abs = target_root / allowed
+        is_dir = allowed_abs.is_dir()
+
+        if is_dir:
+            # Directory scope: allows exact match and all descendants
+            allowed_dir = allowed.rstrip("/")
+            # Case-insensitive comparison
+            allowed_lower = allowed_dir.lower()
+            if relative_lower == allowed_lower or relative_lower.startswith(allowed_lower + "/"):
+                return True
+        else:
+            # File scope: exact match only (case-insensitive)
+            if relative_lower == allowed.lower():
+                return True
+
+        # If this path is an ancestor of an allowed path, we must traverse it
+        # Handle root directory (relative_lower == "") as special case: root is ancestor of everything
+        if relative_lower == "":
+            return True
+        if allowed.lower().startswith(relative_lower + "/"):
+            return True
+
+    return False
+
+
+def _inventory(root: Path, *, max_depth: int, max_directories: int, max_files: int, max_file_bytes: int, max_total_bytes: int, allowed_paths: tuple[str, ...] = ()) -> tuple[tuple[_Candidate, ...], int]:
+    directories, candidates, stack = 1, [], [(root, 0, "")]
     while stack:
-        directory, depth = stack.pop()
+        directory, depth, relative_prefix = stack.pop()
         if depth > max_depth:
             _fail("CODE_AUDIT_DEPTH_LIMIT_EXCEEDED", "Audit depth limit exceeded")
         try:
@@ -113,22 +222,25 @@ def _inventory(root: Path, *, max_depth: int, max_directories: int, max_files: i
         for entry in entries:
             relative = _relative(root, entry)
             metadata = _metadata(entry)
-            _reject(metadata)
+            _reject(metadata, relative=relative)
             if stat.S_ISDIR(metadata.st_mode):
                 directories += 1
                 if directories > max_directories:
                     _fail("CODE_AUDIT_DIRECTORY_LIMIT_EXCEEDED", "Audit directory limit exceeded")
-                if entry.name not in EXCLUDED_DIRECTORIES:
+                # Prune traversal: only descend if directory is ancestor of or within allowed paths
+                if not _is_excluded_directory(entry.name) and _is_path_allowed(relative, allowed_paths, root):
                     if depth + 1 > max_depth:
                         _fail("CODE_AUDIT_DEPTH_LIMIT_EXCEEDED", "Audit depth limit exceeded")
-                    children.append((entry, depth + 1))
+                    children.append((entry, depth + 1, relative))
             elif stat.S_ISREG(metadata.st_mode):
                 if entry.suffix in ALLOWED_EXTENSIONS:
-                    if metadata.st_size > max_file_bytes:
-                        _fail("CODE_AUDIT_FILE_SIZE_EXCEEDED", "An audit file exceeds its size limit")
-                    candidates.append(_Candidate(entry, relative, metadata))
-                    if len(candidates) > max_files:
-                        _fail("CODE_AUDIT_FILE_LIMIT_EXCEEDED", "Audit file limit exceeded")
+                    # Only add candidate if it's within allowed paths
+                    if _is_path_allowed(relative, allowed_paths, root):
+                        if metadata.st_size > max_file_bytes:
+                            _fail("CODE_AUDIT_FILE_SIZE_EXCEEDED", "An audit file exceeds its size limit")
+                        candidates.append(_Candidate(entry, relative, metadata))
+                        if len(candidates) > max_files:
+                            _fail("CODE_AUDIT_FILE_LIMIT_EXCEEDED", "Audit file limit exceeded")
             else:
                 _fail("CODE_AUDIT_UNSAFE_FILE_TYPE", "Audit encountered an unsafe file type")
         stack.extend(reversed(children))
@@ -185,10 +297,49 @@ def _read(candidate: _Candidate, max_file_bytes: int) -> SourceDocument:
     return SourceDocument(candidate.relative, text, len(data))
 
 
-def read_source_documents(value: Any, *, max_depth: int = MAX_DEPTH, max_directories: int = MAX_DIRECTORIES, max_files: int = MAX_FILES, max_file_bytes: int = MAX_FILE_BYTES, max_total_bytes: int = MAX_TOTAL_BYTES) -> SourceInventory:
+def read_source_documents(value: Any, *, max_depth: int = MAX_DEPTH, max_directories: int = MAX_DIRECTORIES, max_files: int = MAX_FILES, max_file_bytes: int = MAX_FILE_BYTES, max_total_bytes: int = MAX_TOTAL_BYTES, allowed_paths: tuple[str, ...] = ()) -> SourceInventory:
     root = validate_target(value)
-    candidates, directories = _inventory(root, max_depth=max_depth, max_directories=max_directories, max_files=max_files, max_file_bytes=max_file_bytes, max_total_bytes=max_total_bytes)
+    candidates, directories = _inventory(root, max_depth=max_depth, max_directories=max_directories, max_files=max_files, max_file_bytes=max_file_bytes, max_total_bytes=max_total_bytes, allowed_paths=allowed_paths)
     documents = tuple(_read(candidate, max_file_bytes) for candidate in candidates)
     if sum(document.bytes_read for document in documents) > max_total_bytes:
         _fail("CODE_AUDIT_TOTAL_SIZE_EXCEEDED", "Audit total size limit exceeded")
     return SourceInventory(root, directories, documents)
+
+
+def read_scoped_source_snapshot(
+    value: Any,
+    *,
+    structural_scope: tuple[str, ...] = (),
+    max_depth: int = MAX_DEPTH,
+    max_directories: int = MAX_DIRECTORIES,
+    max_files: int = MAX_FILES,
+    max_file_bytes: int = MAX_FILE_BYTES,
+    max_total_bytes: int = MAX_TOTAL_BYTES,
+) -> ScopedSourceSnapshot:
+    if type(structural_scope) is not tuple or any(
+        type(item) is not str for item in structural_scope
+    ):
+        _fail("STRUCTURAL_SCOPE_INVALID_PATH", "Structural scope must be a tuple of paths")
+    ordered_scope = tuple(sorted(set(structural_scope)))
+    inventory = read_source_documents(
+        value,
+        max_depth=max_depth,
+        max_directories=max_directories,
+        max_files=max_files,
+        max_file_bytes=max_file_bytes,
+        max_total_bytes=max_total_bytes,
+        allowed_paths=ordered_scope,
+    )
+    documents = tuple(sorted(inventory.documents, key=lambda item: item.path))
+    limits = SourceLimits(
+        max_depth, max_directories, max_files, max_file_bytes, max_total_bytes
+    )
+    return ScopedSourceSnapshot(
+        1,
+        ordered_scope,
+        documents,
+        inventory.directories,
+        limits,
+        (),
+        _snapshot_digest(ordered_scope, documents, limits),
+    )
