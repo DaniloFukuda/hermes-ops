@@ -305,7 +305,10 @@ def test_skill_run_external_clean_clone_dogfooding(
     """Spec: HERMES-0007 / AC-17"""
     if os.environ.get("HERMES_RUN_EXTERNAL_DOGFOODING") != "1":
         pytest.skip("Real external clone dogfooding is an explicit post-suite acceptance step")
-    target = Path(r"C:\example\external-clean-clone")
+    target_value = os.environ.get("HERMES_EXTERNAL_DOGFOOD_TARGET")
+    if not target_value:
+        pytest.skip("External dogfooding target is not configured")
+    target = Path(target_value)
     assert target.is_dir()
     assert not (target / "skills").exists()
     before = (

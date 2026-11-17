@@ -42,6 +42,35 @@ python -m hermes_ops skill run mission-audit --project PATH --mission "inspect s
 .venv/Scripts/python.exe -m pytest
 ```
 
+## Evidence Pack compatibility
+
+Evidence Pack v1 remains readable for historical analysis and never infers
+redundancy from cap signals. Evidence Pack v2 carries explicit
+`omission_provenance`; only complete, deterministic proof for a selected
+same-file comment or docstring can make a cap omission non-blocking. Unknown
+versions, missing provenance, critical/necessary omissions, active-code
+claims, and incomplete records fail closed.
+
+## Memory-assisted audit
+
+The `skill run` interface keeps historical Memory disabled by default. `--memory
+read` opens a supplied SQLite store read-only; `--memory read-write` is an
+explicit opt-in that requires `--memory-store` and `--repository-id` and only
+writes post-audit observations to that store. The target project remains
+outside the writeback boundary.
+
+## Build and validation
+
+```bash
+.venv/Scripts/python.exe -m compileall -q src tests
+.venv/Scripts/python.exe -m build
+```
+
+The runtime has no third-party dependencies. Development dependencies are
+listed under `[project.optional-dependencies].dev` in `pyproject.toml`.
+
 ## Status
 
-This repository contains the current 0.1.0 implementation. It is prepared as a public source copy; publication and license selection require human review.
+This repository contains the `0.2.0rc1` public release candidate. Publication
+requires final human review of the integrated tree, license, documentation,
+security scan, and validation artifacts.

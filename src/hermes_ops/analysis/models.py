@@ -43,6 +43,7 @@ class AnalysisPack:
     reduction_limitations: tuple[str, ...]
     omissions: OmissionSummary
     budget: ContextBudget
+    omission_provenance: tuple[FrozenObject, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

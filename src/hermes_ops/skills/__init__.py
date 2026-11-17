@@ -22,6 +22,30 @@ from hermes_ops.skills.executor import (
     run_skill,
     run_skill_with_context,
 )
+from hermes_ops.skills.execution_path_models import (
+    ExecutionPathClassification,
+    ExecutionPathFinding,
+    ExecutionPathReport,
+    ExecutionPathSeverity,
+)
+from hermes_ops.skills.execution_path_review import (
+    review_execution_path,
+    run_execution_path_review,
+)
+from hermes_ops.skills.finding_models import (
+    CommonSeverity,
+    EvidenceRef,
+    EvidenceStrength,
+    ProductionReachability,
+    RankableFinding,
+    RankedFindingReport,
+)
+from hermes_ops.skills.finding_ranking import (
+    normalize_code_audit_finding,
+    normalize_execution_path_report,
+    rank_findings,
+    ranked_finding_json,
+)
 from hermes_ops.skills.loader import load_skill
 from hermes_ops.skills.models import SkillDefinition, SkillRisk, SkillStatus
 from hermes_ops.skills.policy import SkillPlan, SkillPolicy, plan_skills
@@ -36,6 +60,16 @@ __all__ = (
     "CodeAuditSeverity",
     "CodeAuditSummary",
     "BudgetedSkillExecutionResult",
+    "ExecutionPathClassification",
+    "ExecutionPathFinding",
+    "ExecutionPathReport",
+    "ExecutionPathSeverity",
+    "CommonSeverity",
+    "EvidenceRef",
+    "EvidenceStrength",
+    "ProductionReachability",
+    "RankableFinding",
+    "RankedFindingReport",
     "SkillDefinition",
     "SkillExecutionError",
     "SkillExecutionEvidence",
@@ -54,4 +88,10 @@ __all__ = (
     "plan_skills",
     "run_skill",
     "run_skill_with_context",
+    "review_execution_path",
+    "run_execution_path_review",
+    "normalize_code_audit_finding",
+    "normalize_execution_path_report",
+    "rank_findings",
+    "ranked_finding_json",
 )

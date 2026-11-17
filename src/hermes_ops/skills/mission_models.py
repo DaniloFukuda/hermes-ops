@@ -60,6 +60,19 @@ class RelatedTest:
 
 
 @dataclass(frozen=True, slots=True)
+class OmissionRecord:
+    omission_id: str
+    omitted_region: dict[str, object]
+    equivalent_region: dict[str, object] | None
+    content_kind: str
+    reasons: tuple[str, ...]
+    associated_terms: tuple[str, ...]
+    classification: str
+    cap: str
+    justification: str
+
+
+@dataclass(frozen=True, slots=True)
 class MissionCompleteness:
     status: Literal["sufficient", "insufficient"]
     matched_terms: tuple[str, ...]
@@ -85,7 +98,20 @@ class MissionEvidencePack:
     unresolved_questions: tuple[str, ...]
     completeness: MissionCompleteness
     limitations: tuple[str, ...]
+    structural_scope: tuple[str, ...] = ()
+    omission_provenance: tuple[OmissionRecord, ...] = ()
+
+    def __getattribute__(self, name: str) -> object:
+        # v1 is a historical payload: provenance is intentionally absent from
+        # its public model surface, not an empty proof inferred by the loader.
+        if name == "omission_provenance":
+            version = object.__getattribute__(self, "schema_version")
+            if version == 1:
+                raise AttributeError(name)
+        return object.__getattribute__(self, name)
 
     def __post_init__(self) -> None:
-        if self.schema_version != 1 or self.target != "<PROJECT_ROOT>" or not self.mission:
+        if self.schema_version not in (1, 2) or self.target != "<PROJECT_ROOT>" or not self.mission:
             raise ValueError("invalid mission evidence pack")
+        if self.schema_version == 1 and object.__getattribute__(self, "omission_provenance"):
+            raise ValueError("schema v1 cannot carry omission provenance")

@@ -69,7 +69,7 @@ def test_catalog_is_discovered_with_existing_strict_contract() -> None:
     registry = discover_skills(resolve_own_skill_catalog())
     skill = registry.get_by_id("git-preflight")
     assert skill is not None
-    assert tuple(item.id for item in registry.skills) == ("code-audit", "git-preflight", "mission-audit")
+    assert tuple(item.id for item in registry.skills) == ("code-audit", "execution-path-review", "git-preflight", "mission-audit")
     assert skill.requires == ("git",)
     assert skill.allows_write is False
 

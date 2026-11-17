@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hermes-ops"
-version = "0.1.0"
+version = "0.2.0rc1"
 description = "Execution and governance layer for bounded AI-agent workflows"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -28,6 +28,7 @@ hermes_ops = ["templates/*.toml"]
 "hermes_ops_skill_catalog/skills/git-preflight" = ["skills/git-preflight/SKILL.md"]
 "hermes_ops_skill_catalog/skills/code-audit" = ["skills/code-audit/SKILL.md"]
 "hermes_ops_skill_catalog/skills/mission-audit" = ["skills/mission-audit/SKILL.md"]
+"hermes_ops_skill_catalog/skills/execution-path-review" = ["skills/execution-path-review/SKILL.md"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"
